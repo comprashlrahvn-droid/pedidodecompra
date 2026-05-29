@@ -220,6 +220,29 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .toast.error{border-left:4px solid var(--red);}
 .toast.warning{border-left:4px solid var(--yellow);}
 ::-webkit-scrollbar{width:5px;height:5px;}
+
+/* ── COTAÇÃO & APROVAÇÃO ── */
+.quote-tab-bar{display:flex;gap:2px;border-bottom:2px solid #dce8de;margin-bottom:16px;}
+.quote-tab{padding:8px 16px;font-weight:800;font-size:12.5px;cursor:pointer;border:none;background:none;color:#7a9a80;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .18s;font-family:'Nunito',sans-serif;}
+.quote-tab.active{color:var(--green);border-bottom-color:var(--green);}
+.quote-section{display:none;} .quote-section.active{display:block;}
+.supplier-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;}
+.supplier-row input,.supplier-row select,.supplier-row textarea{background:#f5f8f5;border:1.5px solid #dce8de;border-radius:6px;padding:7px 10px;font-size:13px;font-family:'Nunito',sans-serif;color:#2c3e30;}
+.supplier-row input:focus,.supplier-row select:focus,.supplier-row textarea:focus{outline:none;border-color:var(--green);}
+.supplier-card{background:#f5f8f5;border:1.5px solid #dce8de;border-radius:9px;padding:13px 15px;margin-bottom:10px;position:relative;}
+.supplier-card.winner{background:#f0fbf4;border-color:var(--green-md);border-width:2px;}
+.supplier-card-name{font-weight:900;font-size:13.5px;color:#1a3320;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+.winner-crown{color:#d4ac0d;font-size:15px;}
+.supplier-val{font-size:18px;font-weight:900;color:var(--green);font-family:'Montserrat',sans-serif;}
+.supplier-obs{font-size:12px;color:#6b8570;margin-top:4px;font-style:italic;}
+.alcada-box{background:#fff8f0;border:2px solid #f0c060;border-radius:10px;padding:16px;margin-top:8px;}
+.alcada-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:20px;font-size:12px;font-weight:900;}
+.alcada-pend{background:#fef9e7;color:#916e00;border:1px solid #d4ac0d;}
+.alcada-aprov{background:var(--green-pale);color:var(--green);border:1px solid var(--green-md);}
+.alcada-rejeit{background:#fde8e8;color:var(--red);border:1px solid var(--red);}
+.file-chip{display:inline-flex;align-items:center;gap:6px;background:#e8f5ee;border:1px solid #b0d8c0;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;color:#1a5530;margin:3px;}
+.file-chip a{color:inherit;text-decoration:none;}
+.file-chip:hover{background:#d4f0de;}
 ::-webkit-scrollbar-thumb{background:#b0cbb4;border-radius:3px;}
 ::-webkit-scrollbar-track{background:#e8f0ea;}
 @media(max-width:768px){.sidebar{transform:translateX(-100%)}.main-content{margin-left:0}.row2{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr 1fr}}
@@ -232,6 +255,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .role-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:900;margin-left:6px;}
 .role-master{background:#e0e7ff;color:#3730a3;}
+.role-direcao{background:#fde68a;color:#92400e;}
 .role-admin{background:#fde8e8;color:var(--red);}
 .role-user{background:var(--green-pale);color:var(--green);}
 </style>
@@ -486,6 +510,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 // ════════════════════════════════════════════════════
 // CONFIGURAÇÃO DO BANCO DE DADOS (Google Apps Script)
 // Altere GAS_URL para a URL do seu Web App publicado
+// Ações suportadas: save, load, sendStatusEmail, sendAlcadaEmail
 // ════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
 
@@ -493,7 +518,8 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldf
 const SEED = {
   users:[
     {id:1,name:'Ana Oliveira',email:'user@hospital.com',pass:'123456',role:'user',sector:'UTI',status:'active'},
-    {id:2,name:'Admin Master',email:'comprashlr.ahvn@gmail.com',pass:'admin123',role:'master',sector:'Compras',status:'active'}
+    {id:2,name:'Admin Master',email:'comprashlr.ahvn@gmail.com',pass:'admin123',role:'master',sector:'Compras',status:'active'},
+    {id:3,name:'Direção',email:'direcaohlr.ssvn@gmail.com',pass:'direcao123',role:'direcao',sector:'Direção',status:'active'}
   ],
   categories:['Medicamentos','Material Hospitalar','EPI','Equipamentos','Manutencao','Informatica','Limpeza','Administrativo','Outros'],
   requests:[
@@ -512,7 +538,16 @@ const SEED = {
   nextId:3
 };
 
-function loadDB(){ try{ const s=sessionStorage.getItem('hlr_sol_v1'); if(s) return JSON.parse(s); }catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function loadDB(){
+  try{ const s=sessionStorage.getItem('hlr_sol_v1'); if(s){ const d=JSON.parse(s);
+    // Garantir campos cotação em requests legados
+    (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; });
+    return d; }
+  }catch(e){}
+  const d=JSON.parse(JSON.stringify(SEED));
+  (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; });
+  return d;
+}
 function saveDB(){ try{ sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB)); }catch(e){} syncToGAS(); }
 
 let DB=loadDB();
@@ -547,7 +582,15 @@ async function loadFromGAS(){
   try{
     const r=await fetch(GAS_URL+'?action=load&t='+Date.now());
     const data=await r.json();
-    if(data&&data.users&&!data.error){ DB=data; sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB)); }
+    if(data&&data.users&&!data.error){
+      DB=data;
+      // Migração: garantir campos cotação em requests legados
+      (DB.requests||[]).forEach(r=>{
+        if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+        if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+      });
+      sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
+    }
     gasSetStatus('ok','Carregado da nuvem');
   }catch(e){ gasSetStatus('err','Usando dados locais'); }
 }
@@ -663,19 +706,21 @@ function doLogout(){
 // ── HELPERS ──
 function isAdmin(){ return CU&&(CU.role==='admin'||CU.role==='master'); }
 function isMaster(){ return CU&&CU.role==='master'; }
+function isDirecao(){ return CU&&CU.role==='direcao'; }
+function canSeeQuote(){ return CU&&(CU.role==='master'||CU.role==='direcao'); }
 
 // ── INIT ──
 function initApp(){
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('appPage').classList.remove('hidden');
   document.getElementById('sbName').textContent=CU.name;
-  document.getElementById('sbRole').textContent=isAdmin()?'Administrador':CU.sector;
+  document.getElementById('sbRole').textContent=isAdmin()?'Administrador':isDirecao()?'Direção':CU.sector;
   const av=document.getElementById('sbAv'); av.textContent=CU.name[0].toUpperCase();
   av.className='av'+(isAdmin()?' admin-av':'');
   document.getElementById('tbarUser').textContent=CU.name;
   buildNav();
-  navigate(isAdmin()?'admin-dash':'dashboard');
-  const sid=isAdmin()?'admin':CU.id;
+  navigate((isAdmin()||isDirecao())?'admin-dash':'dashboard');
+  const sid=(isAdmin()||isDirecao())?'admin':CU.id;
   setTimeout(()=>{ checkNotifs(sid); updatePendingBadge(); },400);
   window.addEventListener('beforeunload',()=>saveSnap(sid),{once:true});
   if(GAS_URL){ loadFromGAS().then(()=>{ if(CU){ buildNav(); navigate(isAdmin()?'admin-dash':'dashboard'); } }); }
@@ -685,7 +730,7 @@ function buildNav(){
   const nav=document.getElementById('sbNav');
   const pc=DB.users.filter(u=>u.status==='pending').length;
   const pd=`<span class="nbadge" id="navPD" style="${pc>0?'':'display:none'}">${pc}</span>`;
-  if(isAdmin()){
+  if(isAdmin()||isDirecao()){
     nav.innerHTML=`<div class="nav-sec">Administração</div>
       <div class="nav-item" onclick="navigate('admin-dash')" data-s="admin-dash"><span class="nav-icon">🏠</span> Dashboard</div>
       <div class="nav-item" onclick="navigate('admin-gestao')" data-s="admin-gestao"><span class="nav-icon">📋</span> Gerenciar Solicitações</div>
@@ -757,7 +802,9 @@ function submitReq(){
     if(!desc){ toast('Preencha descrição de todos os itens.','error'); return; }
     items.push({desc,qty,cat}); }
   const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
-    justification:document.getElementById('reqJust').value.trim(),items,value:0,createdAt:new Date().toISOString(),chat:[]};
+    justification:document.getElementById('reqJust').value.trim(),items,value:0,createdAt:new Date().toISOString(),chat:[],
+    quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
+    alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}};
   DB.requests.push(req); saveDB();
   items.forEach(it=>saveItemMem(it.desc,it.cat));
   clearForm(); toast('Solicitação '+req.id+' enviada!','success'); navigate('minhas');
@@ -853,7 +900,9 @@ function showDetail(reqId){
     </div></div>`:''}
     <div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:7px;">💬 Mensagens</div>
     <div class="chat-box"><div class="chat-msgs" id="chatMsgs">${r.chat.map(m=>`<div class="cmsg ${m.from===CU.role||((m.from==='admin'||m.from==='master')&&isAdmin())?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${m.from===CU.role?'r':''}">${m.time} &bull; ${m.from==='user'?r.requester:'Setor Adm.'}</div></div>`).join('')}</div>
-    <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>`;
+    <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
+    ${canSeeQuote()?renderQuoteTab(r):''}
+  `;
   document.getElementById('detailModal').classList.remove('hidden');
   setTimeout(()=>{ const cm=document.getElementById('chatMsgs'); if(cm) cm.scrollTop=cm.scrollHeight; },50);
 }
@@ -894,6 +943,258 @@ function deleteReq(reqId){
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
 }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+// ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
+
+function renderQuoteTab(r){
+  const q = r.quote || {suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  const al = r.alcada || {requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+  const canEdit = isMaster();
+
+  // Aba de cotação
+  const suppHtml = q.suppliers.length
+    ? q.suppliers.map((s,i)=>`
+        <div class="supplier-card ${s.id===q.winnerId?'winner':''}">
+          <div class="supplier-card-name">
+            ${s.id===q.winnerId?'<span class="winner-crown">👑</span>':''}
+            ${s.name}
+            ${canEdit&&s.id!==q.winnerId?`<button class="btn btn-green btn-sm" style="font-size:11px;padding:3px 10px;" onclick="setWinner('${r.id}','${s.id}')">Definir Vencedor</button>`:''}
+            ${canEdit?`<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;margin-left:auto;" onclick="removeSupplier('${r.id}','${s.id}')">✕</button>`:''}
+          </div>
+          <div class="supplier-val">R$ ${(s.value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+          ${s.obs?`<div class="supplier-obs">${s.obs}</div>`:''}
+        </div>`).join('')
+    : `<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhum fornecedor cadastrado ainda.</div>`;
+
+  // Arquivos anexados
+  const filesHtml = (q.files||[]).length
+    ? `<div style="margin-bottom:12px;">${q.files.map(f=>`
+        <span class="file-chip">📎 <span>${f.name}</span>
+        ${canEdit?`<span onclick="removeFile('${r.id}','${f.id}')" style="cursor:pointer;color:#c0392b;margin-left:4px;font-size:14px;" title="Remover">×</span>`:''}
+        </span>`).join('')}</div>`
+    : '';
+
+  // Alçada
+  let alcadaHtml = '';
+  if(al.status==='aprovada'){
+    alcadaHtml=`<div class="alcada-box"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">✅ Aprovação de Alçada</div>
+      <span class="alcada-badge alcada-aprov">✓ Aprovada</span>
+      <div style="font-size:12px;color:#5a7a60;margin-top:6px;">Aprovado por: <strong>${al.approvedBy}</strong> em ${al.approvedAt}</div>
+      ${al.obs?`<div style="font-size:12px;color:#6b8570;margin-top:4px;">${al.obs}</div>`:''}
+    </div>`;
+  } else if(al.status==='rejeitada'){
+    alcadaHtml=`<div class="alcada-box" style="border-color:#e08080;background:#fff5f5;"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">❌ Aprovação de Alçada</div>
+      <span class="alcada-badge alcada-rejeit">✗ Rejeitada</span>
+      <div style="font-size:12px;color:#7f1d1d;margin-top:6px;">Por: <strong>${al.approvedBy}</strong> em ${al.approvedAt}</div>
+      ${al.obs?`<div style="font-size:12px;margin-top:4px;">${al.obs}</div>`:''}
+    </div>`;
+  } else if(al.requested){
+    alcadaHtml=`<div class="alcada-box"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">⏳ Aprovação de Alçada</div>
+      <span class="alcada-badge alcada-pend">⏳ Aguardando aprovação da Direção</span>
+      <div style="font-size:12px;color:#916e00;margin-top:6px;">Solicitado em: ${al.requestedAt}</div>
+      ${isDirecao()?`
+        <div style="margin-top:12px;">
+          <textarea id="alcadaObs" class="fc" placeholder="Observação (opcional)" rows="2" style="margin-bottom:8px;font-size:13px;"></textarea>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-green btn-sm" onclick="resolveAlcada('${r.id}','aprovada')">✅ Aprovar</button>
+            <button class="btn btn-danger btn-sm" onclick="resolveAlcada('${r.id}','rejeitada')">✗ Rejeitar</button>
+          </div>
+        </div>`:''}
+    </div>`;
+  } else {
+    alcadaHtml=`<div class="alcada-box"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">🔐 Aprovação de Alçada</div>
+      <div style="font-size:13px;color:#7a5c00;margin-bottom:10px;">Solicite aprovação da Direção quando necessário.</div>
+      ${canEdit?`<button class="btn btn-yellow btn-sm" onclick="requestAlcada('${r.id}')">📤 Solicitar Aprovação de Alçada</button>`:''}
+    </div>`;
+  }
+
+  return `
+  <hr style="border:none;border-top:1.5px solid #dce8de;margin:18px 0;">
+  <div class="quote-tab-bar">
+    <button class="quote-tab active" onclick="switchQuoteTab(this,'qt-orcamentos')">📎 Orçamentos</button>
+    <button class="quote-tab" onclick="switchQuoteTab(this,'qt-analise')">📊 Análise de Preços</button>
+    <button class="quote-tab" onclick="switchQuoteTab(this,'qt-alcada')">🔐 Aprovação de Alçada</button>
+  </div>
+
+  <div id="qt-orcamentos" class="quote-section active">
+    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:10px;">Arquivos de Orçamento</div>
+    ${filesHtml}
+    ${canEdit?`
+    <div style="margin-bottom:16px;">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:#f0f8f4;border:2px dashed #b0d8c0;border-radius:8px;padding:12px 16px;font-size:13px;font-weight:700;color:#2c6040;">
+        <span style="font-size:22px;">📎</span>
+        <span>Clique para anexar orçamento (PDF, imagem ou planilha)</span>
+        <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" multiple style="display:none" onchange="attachQuoteFile('${r.id}',this)">
+      </label>
+    </div>`:''}
+    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:10px;">Fornecedores Cotados</div>
+    ${suppHtml}
+    ${canEdit?`
+    <div style="background:#f0f8f4;border-radius:9px;padding:14px;margin-top:8px;">
+      <div style="font-weight:800;font-size:12.5px;color:#2c6040;margin-bottom:10px;">➕ Adicionar Fornecedor</div>
+      <div class="supplier-row">
+        <input id="newSuppName" placeholder="Nome do fornecedor" style="flex:2;min-width:140px;">
+        <input id="newSuppVal" type="number" placeholder="Valor R$" min="0" step="0.01" style="flex:1;min-width:100px;">
+        <input id="newSuppObs" placeholder="Observação (prazo, condições...)" style="flex:2;min-width:140px;">
+        <button class="btn btn-green btn-sm" onclick="addSupplier('${r.id}')">Adicionar</button>
+      </div>
+    </div>`:''}
+  </div>
+
+  <div id="qt-analise" class="quote-section">
+    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:10px;">Análise Comparativa</div>
+    ${q.suppliers.length>=2
+      ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr>
+            <th style="background:#f0f4f1;padding:9px 12px;text-align:left;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Fornecedor</th>
+            <th style="background:#f0f4f1;padding:9px 12px;text-align:right;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Valor</th>
+            <th style="background:#f0f4f1;padding:9px 12px;text-align:left;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Observações</th>
+            <th style="background:#f0f4f1;padding:9px 12px;text-align:center;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Situação</th>
+          </tr></thead>
+          <tbody>${[...q.suppliers].sort((a,b)=>a.value-b.value).map((s,i)=>`
+            <tr style="background:${s.id===q.winnerId?'#f0fbf4':i===0?'#f8fff8':'#fff'};">
+              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;font-weight:700;">${s.id===q.winnerId?'👑 ':i===0?'⭐ ':''}${s.name}</td>
+              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;text-align:right;font-weight:900;color:${s.id===q.winnerId?'var(--green)':i===0?'#27ae60':'#2c3e30'};">R$ ${(s.value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;font-size:12px;color:#6b8570;">${s.obs||'—'}</td>
+              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;text-align:center;">${s.id===q.winnerId?'<span style="background:#d4f0de;color:var(--green);font-weight:900;font-size:11px;padding:3px 9px;border-radius:10px;">VENCEDOR</span>':i===0&&s.id!==q.winnerId?'<span style="background:#fff3cd;color:#916e00;font-weight:800;font-size:11px;padding:3px 9px;border-radius:10px;">MENOR PREÇO</span>':'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+        <div style="margin-top:14px;">
+          <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:7px;">Análise do Comprador</div>
+          ${canEdit
+            ? `<textarea id="buyerAnalysisInput" class="fc" rows="3" placeholder="Descreva a análise: motivo da escolha, condições de pagamento, prazo de entrega..." style="font-size:13px;">${q.buyerAnalysis||''}</textarea>
+               <button class="btn btn-green btn-sm" style="margin-top:8px;" onclick="saveBuyerAnalysis('${r.id}')">💾 Salvar Análise</button>`
+            : `<div style="background:#f5f8f5;border-radius:7px;padding:10px 13px;font-size:13px;color:#2c3e30;min-height:48px;">${q.buyerAnalysis||'<span style="color:#7a9a80;">Análise não preenchida.</span>'}</div>`
+          }
+        </div>`
+      : `<div style="color:#7a9a80;font-size:13px;padding:14px;text-align:center;background:#f5f8f5;border-radius:8px;">Cadastre ao menos 2 fornecedores na aba Orçamentos para visualizar a análise comparativa.</div>`
+    }
+    ${q.winnerId
+      ? `<div style="margin-top:14px;background:#f0fbf4;border:2px solid var(--green-md);border-radius:9px;padding:14px;">
+          <div style="font-weight:800;font-size:13px;color:#1a5530;margin-bottom:4px;">🏆 Fornecedor Vencedor</div>
+          <div style="font-size:15px;font-weight:900;color:var(--green);">${q.suppliers.find(s=>s.id===q.winnerId)?.name||'—'}</div>
+          <div style="font-size:17px;font-weight:900;color:var(--green);margin-top:2px;">R$ ${(q.suppliers.find(s=>s.id===q.winnerId)?.value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+        </div>`
+      : ''
+    }
+  </div>
+
+  <div id="qt-alcada" class="quote-section">
+    ${alcadaHtml}
+  </div>`;
+}
+
+function switchQuoteTab(btn, tabId){
+  const modal = btn.closest('.modal');
+  modal.querySelectorAll('.quote-tab').forEach(t=>t.classList.remove('active'));
+  modal.querySelectorAll('.quote-section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  const sec = document.getElementById(tabId);
+  if(sec) sec.classList.add('active');
+}
+
+function addSupplier(reqId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  const name=(document.getElementById('newSuppName')?.value||'').trim();
+  const val=parseFloat(document.getElementById('newSuppVal')?.value)||0;
+  const obs=(document.getElementById('newSuppObs')?.value||'').trim();
+  if(!name){ toast('Informe o nome do fornecedor.','error'); return; }
+  r.quote.suppliers.push({id:'S'+Date.now(),name,value:val,obs});
+  saveDB(); toast('Fornecedor adicionado.','success'); showDetail(reqId);
+}
+
+function removeSupplier(reqId, suppId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  if(r.quote.winnerId===suppId) r.quote.winnerId='';
+  r.quote.suppliers=r.quote.suppliers.filter(s=>s.id!==suppId);
+  saveDB(); toast('Fornecedor removido.','success'); showDetail(reqId);
+}
+
+function setWinner(reqId, suppId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  r.quote.winnerId=suppId;
+  saveDB(); toast('Fornecedor vencedor definido!','success'); showDetail(reqId);
+}
+
+function saveBuyerAnalysis(reqId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  const txt=(document.getElementById('buyerAnalysisInput')?.value||'').trim();
+  r.quote.buyerAnalysis=txt;
+  saveDB(); toast('Análise salva com sucesso.','success'); showDetail(reqId);
+}
+
+function attachQuoteFile(reqId, input){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  if(!r.quote.files) r.quote.files=[];
+  const files=Array.from(input.files);
+  files.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      r.quote.files.push({id:'F'+Date.now()+Math.random().toString(36).slice(2),name:f.name,data:e.target.result,type:f.type,size:f.size});
+      saveDB(); showDetail(reqId);
+    };
+    reader.readAsDataURL(f);
+  });
+  toast(files.length+' arquivo(s) anexado(s).','success');
+}
+
+function removeFile(reqId, fileId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  r.quote.files=r.quote.files.filter(f=>f.id!==fileId);
+  saveDB(); toast('Arquivo removido.','success'); showDetail(reqId);
+}
+
+function requestAlcada(reqId){
+  if(!isMaster()){ toast('Somente o Administrador Master pode solicitar aprovação.','error'); return; }
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+  if(r.alcada.requested){ toast('Aprovação já solicitada.','error'); return; }
+  r.alcada.requested=true;
+  r.alcada.requestedAt=new Date().toLocaleString('pt-BR');
+  r.alcada.status='pendente';
+  saveDB();
+  // Envia e-mail para a Direção via GAS
+  if(GAS_URL){
+    const winner=r.quote?.suppliers?.find(s=>s.id===r.quote?.winnerId);
+    fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        action:'sendAlcadaEmail',
+        to:'direcaohlr.ssvn@gmail.com',
+        reqId:r.id,
+        requester:r.requester,
+        items:(r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
+        value:r.value||0,
+        winnerName:winner?.name||'Não definido',
+        winnerValue:winner?.value||0,
+        buyerAnalysis:r.quote?.buyerAnalysis||'',
+        date:new Date().toLocaleString('pt-BR')
+      })}).catch(()=>{});
+  }
+  toast('Solicitação de aprovação enviada à Direção!','success');
+  showDetail(reqId);
+}
+
+function resolveAlcada(reqId, decision){
+  if(!isDirecao()&&!isMaster()){ toast('Sem permissão.','error'); return; }
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.alcada) return;
+  const obs=(document.getElementById('alcadaObs')?.value||'').trim();
+  r.alcada.status=decision;
+  r.alcada.approvedBy=CU.name;
+  r.alcada.approvedAt=new Date().toLocaleString('pt-BR');
+  r.alcada.obs=obs;
+  saveDB();
+  toast(decision==='aprovada'?'Solicitação aprovada!':'Solicitação rejeitada.', decision==='aprovada'?'success':'warning');
+  showDetail(reqId);
+}
 
 // ── ADMIN DASH ──
 function renderAdminDash(){
@@ -985,6 +1286,7 @@ function renderUsersPage(){
   const roleLabel=(u)=>{
     if(u.role==='master') return '<span class="role-badge role-master">Master</span>';
     if(u.role==='admin') return '<span class="role-badge role-admin">Admin</span>';
+    if(u.role==='direcao') return '<span class="role-badge role-direcao">Direção</span>';
     return '<span class="role-badge role-user">Usuário</span>';
   };
 
