@@ -947,34 +947,139 @@ function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 // ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
 
 function renderQuoteTab(r){
-  const q = r.quote || {suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  const q  = r.quote  || {suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
   const al = r.alcada || {requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
   const canEdit = isMaster();
+  const items   = r.items || [];
 
-  // Aba de cotação
-  const suppHtml = q.suppliers.length
-    ? q.suppliers.map((s,i)=>`
+  // ── arquivos ──────────────────────────────────────────────
+  const filesHtml = (q.files||[]).length
+    ? `<div style="margin-bottom:14px;">`
+      + (q.files||[]).map(f=>{
+          const isImg = f.type && f.type.startsWith('image/');
+          const thumb = isImg
+            ? `<img src="${f.data}" style="width:48px;height:48px;object-fit:cover;border-radius:5px;border:1px solid #c8d8cc;cursor:pointer;" onclick="openFilePreview('${f.id}','${f.reqId||r.id}')" title="Visualizar">`
+            : `<span style="font-size:22px;">📄</span>`;
+          const sizeKb = f.size ? Math.round(f.size/1024)+'KB' : '';
+          return `<div class="file-chip" style="align-items:center;gap:8px;padding:6px 10px;">
+            ${thumb}
+            <div style="line-height:1.3;">
+              <div style="font-weight:800;font-size:12px;">${f.name}</div>
+              ${sizeKb?`<div style="font-size:10px;color:#7a9a80;">${sizeKb}</div>`:''}
+            </div>
+            <a href="${f.data}" download="${f.name}" title="Baixar" style="color:#1e8c3a;font-size:16px;text-decoration:none;">⬇</a>
+            ${canEdit?`<span onclick="removeFile('${r.id}','${f.id}')" style="cursor:pointer;color:#c0392b;font-size:16px;" title="Remover">×</span>`:''}
+          </div>`;
+        }).join('')
+      + `</div>`
+    : `<div style="color:#7a9a80;font-size:13px;padding:8px 0;">Nenhum arquivo anexado.</div>`;
+
+  // ── cards de fornecedor (aba orçamentos) ──────────────────
+  const suppCards = (q.suppliers||[]).length
+    ? (q.suppliers||[]).map(s=>`
         <div class="supplier-card ${s.id===q.winnerId?'winner':''}">
           <div class="supplier-card-name">
             ${s.id===q.winnerId?'<span class="winner-crown">👑</span>':''}
-            ${s.name}
-            ${canEdit&&s.id!==q.winnerId?`<button class="btn btn-green btn-sm" style="font-size:11px;padding:3px 10px;" onclick="setWinner('${r.id}','${s.id}')">Definir Vencedor</button>`:''}
-            ${canEdit?`<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;margin-left:auto;" onclick="removeSupplier('${r.id}','${s.id}')">✕</button>`:''}
+            <span style="flex:1">${s.name}</span>
+            ${s.cnpj?`<span style="font-size:11px;color:#7a9a80;font-weight:600;">CNPJ: ${s.cnpj}</span>`:''}
+            ${canEdit&&s.id!==q.winnerId?`<button class="btn btn-green btn-sm" style="font-size:11px;padding:3px 9px;" onclick="setWinner('${r.id}','${s.id}')">👑 Vencedor</button>`:''}
+            ${canEdit?`<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="removeSupplier('${r.id}','${s.id}')">✕</button>`:''}
           </div>
-          <div class="supplier-val">R$ ${(s.value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px;">
+            <div><div style="font-size:10px;color:#7a9a80;font-weight:700;text-transform:uppercase;">Valor Total</div>
+              <div class="supplier-val">R$ ${(s.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+            ${s.payTerm?`<div><div style="font-size:10px;color:#7a9a80;font-weight:700;text-transform:uppercase;">Prazo Pagamento</div><div style="font-size:13px;font-weight:800;color:#2c3e30;">${s.payTerm}</div></div>`:''}
+            ${s.delivTerm?`<div><div style="font-size:10px;color:#7a9a80;font-weight:700;text-transform:uppercase;">Prazo Entrega</div><div style="font-size:13px;font-weight:800;color:#2c3e30;">${s.delivTerm}</div></div>`:''}
+          </div>
           ${s.obs?`<div class="supplier-obs">${s.obs}</div>`:''}
         </div>`).join('')
     : `<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhum fornecedor cadastrado ainda.</div>`;
 
-  // Arquivos anexados
-  const filesHtml = (q.files||[]).length
-    ? `<div style="margin-bottom:12px;">${q.files.map(f=>`
-        <span class="file-chip">📎 <span>${f.name}</span>
-        ${canEdit?`<span onclick="removeFile('${r.id}','${f.id}')" style="cursor:pointer;color:#c0392b;margin-left:4px;font-size:14px;" title="Remover">×</span>`:''}
-        </span>`).join('')}</div>`
-    : '';
+  // ── formulário adicionar fornecedor ──────────────────────
+  const addSuppForm = canEdit ? `
+    <div style="background:#f0f8f4;border-radius:10px;padding:16px;margin-top:10px;">
+      <div style="font-weight:800;font-size:12.5px;color:#2c6040;margin-bottom:12px;">➕ Adicionar Fornecedor</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Nome do Fornecedor *</label>
+          <input id="nsFornNome" class="fc" placeholder="Ex: Empresa XYZ Ltda" style="margin-top:4px;font-size:13px;"></div>
+        <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">CNPJ</label>
+          <input id="nsFornCnpj" class="fc" placeholder="00.000.000/0000-00" style="margin-top:4px;font-size:13px;" oninput="maskCnpj(this)"></div>
+        <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Prazo de Pagamento</label>
+          <input id="nsFornPagto" class="fc" placeholder="Ex: 30 dias, À vista" style="margin-top:4px;font-size:13px;"></div>
+        <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Prazo de Entrega</label>
+          <input id="nsFornEntrega" class="fc" placeholder="Ex: 5 dias úteis" style="margin-top:4px;font-size:13px;"></div>
+      </div>
+      <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">Valores por Item</div>
+      <div id="nsFornItens" style="margin-bottom:10px;">
+        ${items.map((it,i)=>`
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+            <div style="flex:2;font-size:13px;font-weight:700;color:#2c3e30;min-width:120px;">${it.desc} <span style="color:#7a9a80;">×${it.qty}</span></div>
+            <div style="flex:1;min-width:110px;">
+              <input id="nsFornItemVal_${i}" class="fc" type="number" min="0" step="0.01" placeholder="Valor unitário R$" style="font-size:13px;">
+            </div>
+          </div>`).join('')}
+      </div>
+      <div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Observações</label>
+        <input id="nsFornObs" class="fc" placeholder="Condições especiais, marca, validade..." style="margin-top:4px;font-size:13px;"></div>
+      <button class="btn btn-green btn-sm" onclick="addSupplier('${r.id}',${items.length})">✔ Adicionar Fornecedor</button>
+    </div>` : '';
 
-  // Alçada
+  // ── análise por item ──────────────────────────────────────
+  const buildItemAnalysis = () => {
+    const supps = q.suppliers || [];
+    if(!supps.length) return `<div style="color:#7a9a80;font-size:13px;padding:14px;text-align:center;background:#f5f8f5;border-radius:8px;">Cadastre fornecedores na aba Orçamentos para visualizar a análise.</div>`;
+
+    let html = '';
+    items.forEach((it, i) => {
+      const prices = supps.map(s => ({
+        suppId: s.id, name: s.name,
+        val: (s.itemValues && s.itemValues[i]) ? s.itemValues[i] : 0,
+        total: (s.itemValues && s.itemValues[i]) ? s.itemValues[i] * it.qty : 0
+      })).filter(x=>x.val>0).sort((a,b)=>a.total-b.total);
+
+      if(!prices.length){
+        html += `<div style="background:#f5f8f5;border-radius:9px;padding:12px 14px;margin-bottom:12px;">
+          <div style="font-weight:900;font-size:13px;color:#2c3e30;margin-bottom:4px;">📦 ${it.desc} <span style="color:#7a9a80;font-weight:600;">× ${it.qty}</span></div>
+          <div style="color:#7a9a80;font-size:12px;">Sem preços cadastrados para este item.</div></div>`;
+        return;
+      }
+      const minTotal = prices[0].total;
+      html += `<div style="background:#fff;border:1.5px solid #dce8de;border-radius:10px;padding:14px;margin-bottom:14px;">
+        <div style="font-weight:900;font-size:13.5px;color:#2c3e30;margin-bottom:10px;">📦 ${it.desc} <span style="font-size:11px;color:#7a9a80;font-weight:600;">Qtd: ${it.qty}</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <thead><tr>
+            <th style="background:#f0f4f1;padding:7px 10px;text-align:left;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Fornecedor</th>
+            <th style="background:#f0f4f1;padding:7px 10px;text-align:right;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Unit.</th>
+            <th style="background:#f0f4f1;padding:7px 10px;text-align:right;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Total</th>
+            <th style="background:#f0f4f1;padding:7px 10px;text-align:right;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Dif. %</th>
+            <th style="background:#f0f4f1;padding:7px 10px;text-align:center;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Status</th>
+          </tr></thead>
+          <tbody>${prices.map((p,pi)=>{
+            const isWin = p.suppId===q.winnerId;
+            const isBest = pi===0;
+            const diff = isBest ? 0 : Math.round((p.total/minTotal-1)*100);
+            const rowBg = isWin?'#f0fbf4':isBest?'#f8fff8':'#fff';
+            const valColor = isWin?'var(--green)':isBest?'#27ae60':'#2c3e30';
+            const badge = isWin
+              ? `<span style="background:#d4f0de;color:var(--green);font-weight:900;font-size:10px;padding:2px 8px;border-radius:8px;">VENCEDOR</span>`
+              : isBest
+                ? `<span style="background:#fff3cd;color:#916e00;font-weight:800;font-size:10px;padding:2px 8px;border-radius:8px;">MENOR</span>`
+                : '—';
+            return `<tr style="background:${rowBg};">
+              <td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;font-weight:700;">${isWin?'👑 ':isBest?'⭐ ':''}${p.name}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:right;font-weight:800;color:${valColor};">R$ ${p.val.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:right;font-weight:900;color:${valColor};">R$ ${p.total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:right;font-size:11px;color:${diff>0?'#c0392b':'#27ae60'};">${diff>0?'+'+diff+'%':diff===0?'—':diff+'%'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:center;">${badge}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+    });
+    return html;
+  };
+
+  // ── alçada html ──────────────────────────────────────────
   let alcadaHtml = '';
   if(al.status==='aprovada'){
     alcadaHtml=`<div class="alcada-box"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">✅ Aprovação de Alçada</div>
@@ -1008,78 +1113,58 @@ function renderQuoteTab(r){
     </div>`;
   }
 
+  // ── total por fornecedor ──────────────────────────────────
+  const winner = (q.suppliers||[]).find(s=>s.id===q.winnerId);
+
   return `
   <hr style="border:none;border-top:1.5px solid #dce8de;margin:18px 0;">
   <div class="quote-tab-bar">
     <button class="quote-tab active" onclick="switchQuoteTab(this,'qt-orcamentos')">📎 Orçamentos</button>
-    <button class="quote-tab" onclick="switchQuoteTab(this,'qt-analise')">📊 Análise de Preços</button>
+    <button class="quote-tab" onclick="switchQuoteTab(this,'qt-analise')">📊 Análise por Item</button>
     <button class="quote-tab" onclick="switchQuoteTab(this,'qt-alcada')">🔐 Aprovação de Alçada</button>
   </div>
 
+  <!-- ABA ORÇAMENTOS -->
   <div id="qt-orcamentos" class="quote-section active">
-    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:10px;">Arquivos de Orçamento</div>
+    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">📎 Arquivos Anexados</div>
     ${filesHtml}
     ${canEdit?`
-    <div style="margin-bottom:16px;">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:#f0f8f4;border:2px dashed #b0d8c0;border-radius:8px;padding:12px 16px;font-size:13px;font-weight:700;color:#2c6040;">
-        <span style="font-size:22px;">📎</span>
-        <span>Clique para anexar orçamento (PDF, imagem ou planilha)</span>
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" multiple style="display:none" onchange="attachQuoteFile('${r.id}',this)">
-      </label>
-    </div>`:''}
-    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:10px;">Fornecedores Cotados</div>
-    ${suppHtml}
-    ${canEdit?`
-    <div style="background:#f0f8f4;border-radius:9px;padding:14px;margin-top:8px;">
-      <div style="font-weight:800;font-size:12.5px;color:#2c6040;margin-bottom:10px;">➕ Adicionar Fornecedor</div>
-      <div class="supplier-row">
-        <input id="newSuppName" placeholder="Nome do fornecedor" style="flex:2;min-width:140px;">
-        <input id="newSuppVal" type="number" placeholder="Valor R$" min="0" step="0.01" style="flex:1;min-width:100px;">
-        <input id="newSuppObs" placeholder="Observação (prazo, condições...)" style="flex:2;min-width:140px;">
-        <button class="btn btn-green btn-sm" onclick="addSupplier('${r.id}')">Adicionar</button>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:#f0f8f4;border:2px dashed #b0d8c0;border-radius:8px;padding:11px 15px;font-size:13px;font-weight:700;color:#2c6040;margin-bottom:16px;">
+      <span style="font-size:20px;">📎</span>
+      <span>Clique para anexar orçamento (PDF, imagem ou planilha)</span>
+      <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" multiple style="display:none" onchange="attachQuoteFile('${r.id}',this)">
+    </label>`:''}
+    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">🏢 Fornecedores Cotados</div>
+    ${suppCards}
+    ${addSuppForm}
+  </div>
+
+  <!-- ABA ANÁLISE POR ITEM -->
+  <div id="qt-analise" class="quote-section">
+    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:12px;">Comparativo por Item</div>
+    ${buildItemAnalysis()}
+    <div style="margin-top:16px;">
+      <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:7px;">💬 Análise do Comprador</div>
+      ${canEdit
+        ? `<textarea id="buyerAnalysisInput" class="fc" rows="3" placeholder="Motivo da escolha, condições negociadas, observações gerais..." style="font-size:13px;">${q.buyerAnalysis||''}</textarea>
+           <button class="btn btn-green btn-sm" style="margin-top:8px;" onclick="saveBuyerAnalysis('${r.id}')">💾 Salvar Análise</button>`
+        : `<div style="background:#f5f8f5;border-radius:7px;padding:10px 13px;font-size:13px;color:#2c3e30;min-height:48px;">${q.buyerAnalysis||'<span style="color:#7a9a80;">Análise não preenchida.</span>'}</div>`
+      }
+    </div>
+    ${winner?`
+    <div style="margin-top:14px;background:#f0fbf4;border:2px solid var(--green-md);border-radius:9px;padding:14px;">
+      <div style="font-weight:800;font-size:13px;color:#1a5530;margin-bottom:6px;">🏆 Fornecedor Vencedor</div>
+      <div style="font-size:16px;font-weight:900;color:var(--green);">${winner.name}</div>
+      ${winner.cnpj?`<div style="font-size:12px;color:#5a7a60;margin-top:2px;">CNPJ: ${winner.cnpj}</div>`:''}
+      <div style="font-size:18px;font-weight:900;color:var(--green);margin-top:4px;">R$ ${(winner.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+      <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">
+        ${winner.payTerm?`<div style="font-size:12px;color:#5a7a60;">💳 <strong>${winner.payTerm}</strong></div>`:''}
+        ${winner.delivTerm?`<div style="font-size:12px;color:#5a7a60;">🚚 <strong>${winner.delivTerm}</strong></div>`:''}
       </div>
     </div>`:''}
   </div>
 
-  <div id="qt-analise" class="quote-section">
-    <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:10px;">Análise Comparativa</div>
-    ${q.suppliers.length>=2
-      ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead><tr>
-            <th style="background:#f0f4f1;padding:9px 12px;text-align:left;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Fornecedor</th>
-            <th style="background:#f0f4f1;padding:9px 12px;text-align:right;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Valor</th>
-            <th style="background:#f0f4f1;padding:9px 12px;text-align:left;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Observações</th>
-            <th style="background:#f0f4f1;padding:9px 12px;text-align:center;border-bottom:2px solid #dce8de;font-size:11px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Situação</th>
-          </tr></thead>
-          <tbody>${[...q.suppliers].sort((a,b)=>a.value-b.value).map((s,i)=>`
-            <tr style="background:${s.id===q.winnerId?'#f0fbf4':i===0?'#f8fff8':'#fff'};">
-              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;font-weight:700;">${s.id===q.winnerId?'👑 ':i===0?'⭐ ':''}${s.name}</td>
-              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;text-align:right;font-weight:900;color:${s.id===q.winnerId?'var(--green)':i===0?'#27ae60':'#2c3e30'};">R$ ${(s.value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;font-size:12px;color:#6b8570;">${s.obs||'—'}</td>
-              <td style="padding:9px 12px;border-bottom:1px solid #eaf0ea;text-align:center;">${s.id===q.winnerId?'<span style="background:#d4f0de;color:var(--green);font-weight:900;font-size:11px;padding:3px 9px;border-radius:10px;">VENCEDOR</span>':i===0&&s.id!==q.winnerId?'<span style="background:#fff3cd;color:#916e00;font-weight:800;font-size:11px;padding:3px 9px;border-radius:10px;">MENOR PREÇO</span>':'—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table></div>
-        <div style="margin-top:14px;">
-          <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:7px;">Análise do Comprador</div>
-          ${canEdit
-            ? `<textarea id="buyerAnalysisInput" class="fc" rows="3" placeholder="Descreva a análise: motivo da escolha, condições de pagamento, prazo de entrega..." style="font-size:13px;">${q.buyerAnalysis||''}</textarea>
-               <button class="btn btn-green btn-sm" style="margin-top:8px;" onclick="saveBuyerAnalysis('${r.id}')">💾 Salvar Análise</button>`
-            : `<div style="background:#f5f8f5;border-radius:7px;padding:10px 13px;font-size:13px;color:#2c3e30;min-height:48px;">${q.buyerAnalysis||'<span style="color:#7a9a80;">Análise não preenchida.</span>'}</div>`
-          }
-        </div>`
-      : `<div style="color:#7a9a80;font-size:13px;padding:14px;text-align:center;background:#f5f8f5;border-radius:8px;">Cadastre ao menos 2 fornecedores na aba Orçamentos para visualizar a análise comparativa.</div>`
-    }
-    ${q.winnerId
-      ? `<div style="margin-top:14px;background:#f0fbf4;border:2px solid var(--green-md);border-radius:9px;padding:14px;">
-          <div style="font-weight:800;font-size:13px;color:#1a5530;margin-bottom:4px;">🏆 Fornecedor Vencedor</div>
-          <div style="font-size:15px;font-weight:900;color:var(--green);">${q.suppliers.find(s=>s.id===q.winnerId)?.name||'—'}</div>
-          <div style="font-size:17px;font-weight:900;color:var(--green);margin-top:2px;">R$ ${(q.suppliers.find(s=>s.id===q.winnerId)?.value||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-        </div>`
-      : ''
-    }
-  </div>
-
+  <!-- ABA ALÇADA -->
   <div id="qt-alcada" class="quote-section">
     ${alcadaHtml}
   </div>`;
@@ -1094,15 +1179,36 @@ function switchQuoteTab(btn, tabId){
   if(sec) sec.classList.add('active');
 }
 
-function addSupplier(reqId){
+function maskCnpj(el){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length>14) v=v.slice(0,14);
+  v=v.replace(/^(\d{2})(\d)/,'$1.$2')
+     .replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3')
+     .replace(/\.(\d{3})(\d)/,'.$1/$2')
+     .replace(/(\d{4})(\d)/,'$1-$2');
+  el.value=v;
+}
+
+function addSupplier(reqId, numItems){
   if(!isMaster()) return;
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
   if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-  const name=(document.getElementById('newSuppName')?.value||'').trim();
-  const val=parseFloat(document.getElementById('newSuppVal')?.value)||0;
-  const obs=(document.getElementById('newSuppObs')?.value||'').trim();
+  const name=(document.getElementById('nsFornNome')?.value||'').trim();
   if(!name){ toast('Informe o nome do fornecedor.','error'); return; }
-  r.quote.suppliers.push({id:'S'+Date.now(),name,value:val,obs});
+  const cnpj=(document.getElementById('nsFornCnpj')?.value||'').trim();
+  const payTerm=(document.getElementById('nsFornPagto')?.value||'').trim();
+  const delivTerm=(document.getElementById('nsFornEntrega')?.value||'').trim();
+  const obs=(document.getElementById('nsFornObs')?.value||'').trim();
+  // Valores por item
+  const itemValues=[];
+  let totalValue=0;
+  for(let i=0;i<numItems;i++){
+    const v=parseFloat(document.getElementById('nsFornItemVal_'+i)?.value)||0;
+    const qty=(r.items[i]?.qty||1);
+    itemValues.push(v);
+    totalValue+=v*qty;
+  }
+  r.quote.suppliers.push({id:'S'+Date.now(),name,cnpj,payTerm,delivTerm,obs,itemValues,totalValue});
   saveDB(); toast('Fornecedor adicionado.','success'); showDetail(reqId);
 }
 
@@ -1127,7 +1233,18 @@ function saveBuyerAnalysis(reqId){
   if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
   const txt=(document.getElementById('buyerAnalysisInput')?.value||'').trim();
   r.quote.buyerAnalysis=txt;
-  saveDB(); toast('Análise salva com sucesso.','success'); showDetail(reqId);
+  saveDB(); toast('Análise salva.','success'); showDetail(reqId);
+}
+
+function openFilePreview(fileId, reqId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  const f=(r.quote.files||[]).find(x=>x.id===fileId); if(!f) return;
+  const win=window.open('','_blank','width=900,height=700');
+  if(f.type&&f.type.startsWith('image/')){
+    win.document.write(`<html><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${f.data}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body></html>`);
+  } else {
+    win.document.write(`<html><body style="margin:0;"><embed src="${f.data}" type="${f.type}" width="100%" height="100%" style="position:fixed;inset:0;"></body></html>`);
+  }
 }
 
 function attachQuoteFile(reqId, input){
@@ -1136,15 +1253,16 @@ function attachQuoteFile(reqId, input){
   if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
   if(!r.quote.files) r.quote.files=[];
   const files=Array.from(input.files);
+  let loaded=0;
   files.forEach(f=>{
     const reader=new FileReader();
     reader.onload=e=>{
-      r.quote.files.push({id:'F'+Date.now()+Math.random().toString(36).slice(2),name:f.name,data:e.target.result,type:f.type,size:f.size});
-      saveDB(); showDetail(reqId);
+      r.quote.files.push({id:'F'+Date.now()+Math.random().toString(36).slice(2),name:f.name,data:e.target.result,type:f.type,size:f.size,reqId});
+      loaded++;
+      if(loaded===files.length){ saveDB(); toast(files.length+' arquivo(s) anexado(s).','success'); showDetail(reqId); }
     };
     reader.readAsDataURL(f);
   });
-  toast(files.length+' arquivo(s) anexado(s).','success');
 }
 
 function removeFile(reqId, fileId){
