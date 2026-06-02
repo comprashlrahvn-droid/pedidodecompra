@@ -223,6 +223,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 
 /* ── COTAÇÃO & APROVAÇÃO ── */
 .quote-tab-bar{display:flex;gap:2px;border-bottom:2px solid #dce8de;margin-bottom:16px;}
+.approver-opt{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:9px;border:1.5px solid #dce8de;cursor:pointer;margin-bottom:8px;transition:all .18s;background:#fff;}
+.approver-opt:hover,.approver-opt.selected{border-color:var(--green);background:#f0fbf4;}
+.approver-opt .av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-md));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0;}
 .quote-tab{padding:8px 16px;font-weight:800;font-size:12.5px;cursor:pointer;border:none;background:none;color:#7a9a80;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .18s;font-family:'Nunito',sans-serif;}
 .quote-tab.active{color:var(--green);border-bottom-color:var(--green);}
 .quote-section{display:none;} .quote-section.active{display:block;}
@@ -492,11 +495,27 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="approverModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="mhdr" style="background:linear-gradient(135deg,#d4ac0d,#f1c40f);">
+      <h3>📤 Solicitar Aprovação de Alçada</h3>
+    </div>
+    <div class="mbody" style="color:#2c3e30;">
+      <div style="font-size:13px;color:#5a7a60;margin-bottom:14px;">Selecione o usuário que receberá a solicitação de aprovação por e-mail e no sistema:</div>
+      <div id="approverList" style="max-height:300px;overflow-y:auto;"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline btn-sm" onclick="closeModal('approverModal')">Cancelar</button>
+        <button class="btn btn-yellow btn-sm" onclick="confirmRequestAlcada()">📤 Enviar Solicitação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="notifModal">
   <div class="modal" style="max-width:520px;">
     <div class="mhdr green"><h3 id="notifTitle">&#128276; Novidades</h3></div>
     <div class="stripe"></div>
-    <div class="mbody" style="max-height:60vh;overflow-y:auto;">
+    <div class="mbody" id="notifBody" style="max-height:60vh;overflow-y:auto;">
       <p id="notifSubtitle" style="font-size:13px;color:var(--g500);margin-bottom:14px;"></p>
       <div id="notifList"></div>
     </div>
@@ -541,11 +560,11 @@ const SEED = {
 function loadDB(){
   try{ const s=sessionStorage.getItem('hlr_sol_v1'); if(s){ const d=JSON.parse(s);
     // Garantir campos cotação em requests legados
-    (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; });
+    (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; if(!r.attachments) r.attachments=[]; });
     return d; }
   }catch(e){}
   const d=JSON.parse(JSON.stringify(SEED));
-  (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; });
+  (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; if(!r.attachments) r.attachments=[]; });
   return d;
 }
 function saveDB(){ try{ sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB)); }catch(e){} syncToGAS(); }
@@ -588,6 +607,7 @@ async function loadFromGAS(){
       (DB.requests||[]).forEach(r=>{
         if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
         if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+        if(!r.attachments) r.attachments=[];
       });
       sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
     }
@@ -707,7 +727,12 @@ function doLogout(){
 function isAdmin(){ return CU&&(CU.role==='admin'||CU.role==='master'); }
 function isMaster(){ return CU&&CU.role==='master'; }
 function isDirecao(){ return CU&&CU.role==='direcao'; }
-function canSeeQuote(){ return CU&&(CU.role==='master'||CU.role==='direcao'); }
+function canSeeQuote(){
+  if(!CU) return false;
+  if(CU.role==='master'||CU.role==='direcao') return true;
+  // Usuário designado como aprovador em alguma solicitação aberta
+  return DB.requests.some(r=>r.alcada&&r.alcada.approverId===CU.id&&r.alcada.status==='pendente');
+}
 
 // ── INIT ──
 function initApp(){
@@ -754,7 +779,11 @@ function navigate(sec){
     'admin-users':'Gerenciar Usuários','admin-cat':'Categorias'};
   document.getElementById('tbarTitle').textContent=titles[sec]||sec;
   const uc=DB.requests.filter(r=>r.type==='IMEDIATA'||r.type==='URGENTE').length;
-  document.getElementById('ndot').style.display=uc>0?'block':'none';
+  // Alçadas pendentes para o usuário logado
+  const alcPend=CU?DB.requests.filter(r=>r.alcada&&r.alcada.status==='pendente'&&r.alcada.approverId===CU.id).length:0;
+  const totalBadge=uc+alcPend;
+  const ndot=document.getElementById('ndot');
+  if(ndot){ ndot.style.display=totalBadge>0?'block':'none'; if(alcPend>0) ndot.style.background='#d4ac0d'; else ndot.style.background='var(--red)'; }
   const pd=document.getElementById('navPD');
   if(pd){ const pc=DB.users.filter(u=>u.status==='pending').length; pd.textContent=pc; pd.style.display=pc>0?'inline':'none'; }
   if(sec==='dashboard') renderUserDash();
@@ -784,8 +813,36 @@ function addItem(){
   tb.appendChild(tr);
 }
 function removeItem(id){ const tr=document.getElementById('ir-'+id); if(tr&&document.querySelectorAll('#itemsBody tr').length>1) tr.remove(); else toast('Mínimo 1 item.','warning'); }
-function clearForm(){ document.getElementById('itemsBody').innerHTML=''; iCount=0; attachedFiles=[]; document.getElementById('reqType').value=''; document.getElementById('reqJust').value=''; document.getElementById('attachPrevs').innerHTML=''; addItem(); }
-function handleFiles(input){ const pv=document.getElementById('attachPrevs'); Array.from(input.files).forEach(f=>{ attachedFiles.push(f); const r=new FileReader(); r.onload=e=>{ const img=document.createElement('img'); img.src=e.target.result; img.className='attach-prev'; pv.appendChild(img); }; r.readAsDataURL(f); }); }
+function clearForm(){ document.getElementById('itemsBody').innerHTML=''; iCount=0; attachedFiles=[]; document.getElementById('reqType').value=''; document.getElementById('reqJust').value=''; const ap=document.getElementById('attachPrevs'); if(ap) ap.innerHTML=''; addItem(); }
+function handleFiles(input){
+  const pv=document.getElementById('attachPrevs');
+  Array.from(input.files).forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      // Guarda o objeto completo com base64 para persistir no request
+      attachedFiles.push({name:f.name,type:f.type,size:f.size,data:e.target.result,id:'A'+Date.now()+Math.random().toString(36).slice(2)});
+      // Preview visual
+      const wrap=document.createElement('div');
+      wrap.style.cssText='position:relative;display:inline-block;margin:4px;';
+      if(f.type.startsWith('image/')){
+        const img=document.createElement('img');
+        img.src=e.target.result;
+        img.className='attach-prev';
+        img.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px;border:1.5px solid #c8d8cc;cursor:pointer;';
+        img.title=f.name;
+        wrap.appendChild(img);
+      } else {
+        wrap.innerHTML=`<div style="width:56px;height:56px;border-radius:6px;border:1.5px solid #c8d8cc;background:#f0f8f4;display:flex;align-items:center;justify-content:center;font-size:24px;" title="${f.name}">📄</div>`;
+      }
+      const lbl=document.createElement('div');
+      lbl.style.cssText='font-size:9px;color:#5a7a60;text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      lbl.textContent=f.name;
+      wrap.appendChild(lbl);
+      pv.appendChild(wrap);
+    };
+    reader.readAsDataURL(f);
+  });
+}
 function checkUrgency(){ const v=document.getElementById('reqType').value; if(v==='IMEDIATA'||v==='URGENTE') document.getElementById('urgModal').classList.remove('hidden'); }
 function acceptUrg(){ document.getElementById('urgModal').classList.add('hidden'); toast('Urgência confirmada.','warning'); }
 function rejectUrg(){ document.getElementById('urgModal').classList.add('hidden'); document.getElementById('reqType').value=''; toast('Selecione outro tipo.','success'); }
@@ -805,6 +862,8 @@ function submitReq(){
     justification:document.getElementById('reqJust').value.trim(),items,value:0,createdAt:new Date().toISOString(),chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
     alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}};
+  // Salvar arquivos anexados diretamente no request
+  req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
   DB.requests.push(req); saveDB();
   items.forEach(it=>saveItemMem(it.desc,it.cat));
   clearForm(); toast('Solicitação '+req.id+' enviada!','success'); navigate('minhas');
@@ -879,6 +938,16 @@ function renderMyItems(){
 }
 
 // ── DETAIL MODAL ──
+function previewAttachment(fileId, reqId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  const f=(r.attachments||[]).find(x=>x.id===fileId); if(!f) return;
+  const win=window.open('','_blank','width=900,height=700,resizable=yes');
+  if(f.type&&f.type.startsWith('image/')){
+    win.document.write(`<!DOCTYPE html><html><head><title>${f.name}</title></head><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${f.data}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body></html>`);
+  } else {
+    win.document.write(`<!DOCTYPE html><html><body style="margin:0;"><embed src="${f.data}" type="${f.type}" width="100%" height="100%" style="position:fixed;inset:0;height:100vh;"></body></html>`);
+  }
+}
 function showDetail(reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
   const canAdmin=isAdmin();
@@ -891,6 +960,25 @@ function showDetail(reqId){
     <div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Itens</div>
     ${r.items.map(it=>`<div style="padding:5px 0;border-bottom:1px solid #eaf0ea;">${it.desc} &times; ${it.qty} ${it.cat?'('+it.cat+')':''}</div>`).join('')}</div>
     ${r.justification?`<div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Justificativa</div><div style="background:var(--g50);padding:10px 12px;border-radius:7px;font-size:13px;">${r.justification}</div></div>`:''}
+    ${(r.attachments&&r.attachments.length)?`
+    <div style="margin-top:14px;">
+      <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">📎 Anexos da Solicitação</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${r.attachments.map(f=>{
+          const isImg=f.type&&f.type.startsWith('image/');
+          return `<div style="background:#f0f8f4;border:1.5px solid #c8d8cc;border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;max-width:220px;">
+            ${isImg
+              ? `<img src="${f.data}" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid #c8d8cc;" onclick="previewAttachment('${f.id}','${r.id}')" title="Visualizar">`
+              : `<span style="font-size:26px;">📄</span>`}
+            <div style="min-width:0;">
+              <div style="font-weight:800;font-size:12px;color:#2c3e30;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</div>
+              <div style="font-size:10px;color:#7a9a80;">${f.size?Math.round(f.size/1024)+'KB':''}</div>
+              <a href="${f.data}" download="${f.name}" style="font-size:11px;color:var(--green);font-weight:700;text-decoration:none;">⬇ Baixar</a>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:''}
     ${canAdmin?`<div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Atualizar Status</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <select class="fc" id="dtStatus" style="max-width:240px;">${DB.statusLabels.map((l,i)=>`<option value="${i}" ${i===r.status?'selected':''}>${l}</option>`).join('')}</select>
@@ -1095,8 +1183,9 @@ function renderQuoteTab(r){
     </div>`;
   } else if(al.requested){
     alcadaHtml=`<div class="alcada-box"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">⏳ Aprovação de Alçada</div>
-      <span class="alcada-badge alcada-pend">⏳ Aguardando aprovação da Direção</span>
-      <div style="font-size:12px;color:#916e00;margin-top:6px;">Solicitado em: ${al.requestedAt}</div>
+      <span class="alcada-badge alcada-pend">⏳ Aguardando aprovação</span>
+      ${al.approverName?`<div style="font-size:12.5px;font-weight:800;color:#7a5c00;margin-top:6px;">Enviado para: ${al.approverName}</div>`:''}      
+      <div style="font-size:12px;color:#916e00;margin-top:4px;">Solicitado em: ${al.requestedAt}</div>
       ${isDirecao()?`
         <div style="margin-top:12px;">
           <textarea id="alcadaObs" class="fc" placeholder="Observação (opcional)" rows="2" style="margin-bottom:8px;font-size:13px;"></textarea>
@@ -1108,8 +1197,8 @@ function renderQuoteTab(r){
     </div>`;
   } else {
     alcadaHtml=`<div class="alcada-box"><div style="font-weight:800;font-size:13px;margin-bottom:8px;">🔐 Aprovação de Alçada</div>
-      <div style="font-size:13px;color:#7a5c00;margin-bottom:10px;">Solicite aprovação da Direção quando necessário.</div>
-      ${canEdit?`<button class="btn btn-yellow btn-sm" onclick="requestAlcada('${r.id}')">📤 Solicitar Aprovação de Alçada</button>`:''}
+      <div style="font-size:13px;color:#7a5c00;margin-bottom:10px;">Selecione o responsável que deverá aprovar esta solicitação.</div>
+      ${canEdit?`<button class="btn btn-yellow btn-sm" onclick="openApproverModal('${r.id}')">📤 Solicitar Aprovação de Alçada</button>`:''}
     </div>`;
   }
 
@@ -1271,38 +1360,95 @@ function removeFile(reqId, fileId){
   saveDB(); toast('Arquivo removido.','success'); showDetail(reqId);
 }
 
-function requestAlcada(reqId){
+let _alcadaPendingReqId = null;
+let _alcadaSelectedUserId = null;
+
+function openApproverModal(reqId){
   if(!isMaster()){ toast('Somente o Administrador Master pode solicitar aprovação.','error'); return; }
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(r.alcada&&r.alcada.requested){ toast('Aprovação já solicitada.','error'); return; }
+  _alcadaPendingReqId = reqId;
+  _alcadaSelectedUserId = null;
+  // Lista usuários ativos exceto o próprio CU
+  const eligible = DB.users.filter(u=>u.status==='active' && u.id!==CU.id);
+  const listEl = document.getElementById('approverList');
+  if(!eligible.length){
+    listEl.innerHTML='<div style="color:#7a9a80;font-size:13px;padding:10px;">Nenhum usuário disponível.</div>';
+  } else {
+    listEl.innerHTML = eligible.map(u=>`
+      <div class="approver-opt" id="aopt_${u.id}" onclick="selectApprover(${u.id})">
+        <div class="av">${(u.name||'?')[0].toUpperCase()}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:13.5px;color:#1a3320;">${u.name}</div>
+          <div style="font-size:11.5px;color:#5a7a60;">${u.email||'—'} &bull; ${u.sector||'—'}</div>
+          <div style="font-size:11px;margin-top:2px;">${u.role==='master'?'<span style="background:#e0e7ff;color:#3730a3;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Master</span>':u.role==='direcao'?'<span style="background:#fde68a;color:#92400e;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Direção</span>':u.role==='admin'?'<span style="background:#dcfce7;color:#166534;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Admin</span>':'<span style="background:#f0f4f1;color:#5a7a60;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Usuário</span>'}</div>
+        </div>
+      </div>`).join('');
+  }
+  closeModal('detailModal');
+  document.getElementById('approverModal').classList.remove('hidden');
+}
+
+function selectApprover(userId){
+  _alcadaSelectedUserId = userId;
+  document.querySelectorAll('.approver-opt').forEach(el=>el.classList.remove('selected'));
+  const el=document.getElementById('aopt_'+userId);
+  if(el) el.classList.add('selected');
+}
+
+function confirmRequestAlcada(){
+  if(!_alcadaPendingReqId){ toast('Erro interno.','error'); return; }
+  if(!_alcadaSelectedUserId){ toast('Selecione um aprovador.','error'); return; }
+  const r=DB.requests.find(x=>x.id===_alcadaPendingReqId); if(!r) return;
+  const approver=DB.users.find(u=>u.id===_alcadaSelectedUserId); if(!approver) return;
   if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
-  if(r.alcada.requested){ toast('Aprovação já solicitada.','error'); return; }
   r.alcada.requested=true;
   r.alcada.requestedAt=new Date().toLocaleString('pt-BR');
   r.alcada.status='pendente';
+  r.alcada.approverId=approver.id;
+  r.alcada.approverName=approver.name;
+  r.alcada.approverEmail=approver.email;
+  // Notificação interna (badge no sistema)
+  if(!approver.notifications) approver.notifications=[];
+  approver.notifications.push({
+    id:'N'+Date.now(),
+    type:'alcada',
+    reqId:r.id,
+    msg:'Aprovação de alçada solicitada para a solicitação '+r.id+' ('+r.requester+')',
+    at:new Date().toLocaleString('pt-BR'),
+    read:false
+  });
   saveDB();
-  // Envia e-mail para a Direção via GAS
-  if(GAS_URL){
+  // E-mail via GAS
+  if(GAS_URL&&approver.email){
     const winner=r.quote?.suppliers?.find(s=>s.id===r.quote?.winnerId);
     fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         action:'sendAlcadaEmail',
-        to:'direcaohlr.ssvn@gmail.com',
+        to:approver.email,
+        approverName:approver.name,
         reqId:r.id,
         requester:r.requester,
         items:(r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
         value:r.value||0,
         winnerName:winner?.name||'Não definido',
-        winnerValue:winner?.value||0,
+        winnerValue:winner?.totalValue||winner?.value||0,
         buyerAnalysis:r.quote?.buyerAnalysis||'',
         date:new Date().toLocaleString('pt-BR')
       })}).catch(()=>{});
   }
-  toast('Solicitação de aprovação enviada à Direção!','success');
-  showDetail(reqId);
+  closeModal('approverModal');
+  toast('Solicitação enviada para '+approver.name+'!','success');
+  showDetail(_alcadaPendingReqId);
+  _alcadaPendingReqId=null; _alcadaSelectedUserId=null;
+  // Atualiza badge de notificação
+  updateNotifBadge();
 }
 
 function resolveAlcada(reqId, decision){
-  if(!isDirecao()&&!isMaster()){ toast('Sem permissão.','error'); return; }
+  const r2=DB.requests.find(x=>x.id===reqId);
+  const isDesignated=r2&&r2.alcada&&r2.alcada.approverId===CU.id;
+  if(!isDirecao()&&!isMaster()&&!isDesignated){ toast('Sem permissão para aprovar esta solicitação.','error'); return; }
   const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.alcada) return;
   const obs=(document.getElementById('alcadaObs')?.value||'').trim();
   r.alcada.status=decision;
@@ -1510,11 +1656,39 @@ function toast(msg,type='success'){ const c=document.getElementById('toastWrap')
   setTimeout(()=>{ t.style.animation='tIn .25s ease reverse'; setTimeout(()=>t.remove(),250); },3500); }
 
 function showNotifs(){
-  const u=DB.requests.filter(r=>r.type==='IMEDIATA'||r.type==='URGENTE');
-  const msgs=[];
-  if(u.length) msgs.push(u.length+' solicitação(ões) urgente(s)!');
-  if(msgs.length) msgs.forEach(m=>toast(m,'warning'));
-  else toast('Nenhuma notificação urgente.','success');
+  const mbody=document.getElementById('notifBody');
+  if(!mbody){ document.getElementById('notifModal').classList.remove('hidden'); return; }
+  const urgent=DB.requests.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
+  const alcadas=CU?DB.requests.filter(r=>r.alcada&&r.alcada.status==='pendente'&&r.alcada.approverId===CU.id):[];
+  let html='';
+  if(alcadas.length){
+    html+=`<div style="font-weight:800;font-size:12px;color:#916e00;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">🔐 Aprovações de Alçada Pendentes</div>`;
+    html+=alcadas.map(r=>`
+      <div style="background:#fff8f0;border:1.5px solid #f0c060;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">
+        <div style="flex:1;">
+          <div style="font-weight:900;font-size:13px;color:#1a3320;">${r.id} — ${r.requester}</div>
+          <div style="font-size:11.5px;color:#7a5c00;margin-top:2px;">Solicitado em: ${r.alcada.requestedAt}</div>
+          <div style="font-size:11.5px;color:#5a7a60;margin-top:1px;">${(r.items||[]).map(i=>i.desc+' ×'+i.qty).join(', ')}</div>
+        </div>
+        <button class="btn btn-green btn-sm" onclick="closeModal('notifModal');showDetail('${r.id}')">Ver →</button>
+      </div>`).join('');
+  }
+  if(urgent.length){
+    html+=`<div style="font-weight:800;font-size:12px;color:#c0392b;text-transform:uppercase;letter-spacing:.4px;margin:${alcadas.length?'14px':0} 0 8px;">⚠ Solicitações Urgentes</div>`;
+    html+=urgent.map(r=>`
+      <div style="background:#fff5f5;border:1.5px solid #f0a0a0;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">
+        <div style="flex:1;">
+          <div style="font-weight:900;font-size:13px;color:#1a3320;">${r.id} — ${r.requester}</div>
+          <div style="font-size:11.5px;color:#c0392b;margin-top:2px;">${r.type}</div>
+        </div>
+        ${isAdmin()?`<button class="btn btn-outline btn-sm" onclick="closeModal('notifModal');showDetail('${r.id}')">Ver →</button>`:''}
+      </div>`).join('');
+  }
+  if(!alcadas.length&&!urgent.length){
+    html=`<div style="text-align:center;padding:24px;color:#7a9a80;"><div style="font-size:32px;margin-bottom:8px;">✅</div><div style="font-size:13px;font-weight:700;">Sem notificações pendentes.</div></div>`;
+  }
+  mbody.innerHTML=html;
+  document.getElementById('notifModal').classList.remove('hidden');
 }
 
 // ── VIEW FILE ──
@@ -1526,6 +1700,8 @@ window.addEventListener('DOMContentLoaded',function(){
   if(stored){ try{ const p=JSON.parse(stored); DB.users=p.users||DB.users; DB.requests=p.requests||DB.requests; DB.categories=p.categories||DB.categories; DB.nextId=p.nextId||DB.nextId; DB.statusLabels=p.statusLabels||DB.statusLabels; }catch(e){} }
   const cu=localStorage.getItem('hlr_cu');
   if(cu){ try{ const s=JSON.parse(cu); if(s.email&&s.pass){ const u=DB.users.find(x=>x.email===s.email&&x.pass===s.pass&&x.status==='active'); if(u){ CU=u; initApp(); return; } } }catch(e){} }
+  // Garantir campo notifications em todos os usuários
+  DB.users.forEach(u=>{ if(!u.notifications) u.notifications=[]; });
   document.getElementById('loginPage').classList.remove('hidden');
   document.getElementById('appPage').classList.add('hidden');
   if(GAS_URL) document.getElementById('gasStatusBar').style.display='flex';
