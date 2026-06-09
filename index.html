@@ -534,6 +534,29 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 // CONFIGURAÇÃO DO BANCO DE DADOS (Google Apps Script)
 // Altere GAS_URL para a URL do seu Web App publicado
 // Ações suportadas: save, load, sendStatusEmail, sendAlcadaEmail
+
+// ── Função centralizada para POST ao GAS ──────────────────────────────────
+// O GAS requer que o body seja enviado como texto puro (não application/json)
+// quando chamado de outro domínio, pois o CORS do GAS não permite preflight.
+// Usamos Content-Type text/plain para evitar preflight e permitir CORS simples.
+async function gasPost(payload){
+  if(!GAS_URL) return null;
+  try{
+    const resp = await fetch(GAS_URL, {
+      method: 'POST',
+      // text/plain evita preflight OPTIONS — o GAS aceita e faz JSON.parse internamente
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      redirect: 'follow'
+    });
+    // GAS redireciona para uma URL com o resultado
+    const text = await resp.text();
+    try{ return JSON.parse(text); }catch(e){ return {success:true}; }
+  }catch(err){
+    console.warn('gasPost error:', err);
+    return null;
+  }
+}
 // ════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
 
@@ -593,8 +616,7 @@ async function syncToGAS(){
   if(!GAS_URL||gasSyncing) return;
   gasSyncing=true; gasSetStatus('sync','Sincronizando...');
   try{
-    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'save',data:DB})});
+    await gasPost({action:'save',data:DB});
     gasSetStatus('ok','Salvo na nuvem');
   }catch(e){ gasSetStatus('err','Erro ao salvar'); }
   finally{ gasSyncing=false; }
@@ -1011,10 +1033,9 @@ function emailUser(req,oldStatus){
   if(!user||!user.email) return;
   const oldLbl=DB.statusLabels[oldStatus]||('Status '+oldStatus);
   const newLbl=DB.statusLabels[req.status]||('Status '+req.status);
-  fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
-      items:(req.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-      oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')})}).catch(()=>{});
+  gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
+    items:(req.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
+    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')});
 }
 function adminUpdate(reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
@@ -1426,25 +1447,26 @@ function confirmRequestAlcada(){
     read:false
   });
   saveDB();
-  // E-mail via GAS
+  // E-mail via GAS — usa gasPost para garantir envio correto
   if(GAS_URL&&approver.email){
-    const winner=r.quote?.suppliers?.find(s=>s.id===r.quote?.winnerId);
-    fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-          action:'sendAlcadaEmail',
-          to:approver.email,
-          approverName:approver.name,
-          reqId:r.id,
-          requester:r.requester,
-          sector:r.sector||'—',
-          items:(r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-          value:r.value||0,
-          winnerName:(r.quote?.suppliers?.find(s=>s.id===r.quote?.winnerId))?.name||'Não definido',
-          winnerValue:(r.quote?.suppliers?.find(s=>s.id===r.quote?.winnerId))?.totalValue||0,
-          buyerAnalysis:r.quote?.buyerAnalysis||'',
-          requestedBy:CU.name,
-          date:new Date().toLocaleString('pt-BR')
-      })}).catch(()=>{});
+    const _winner = (r.quote?.suppliers||[]).find(s=>s.id===r.quote?.winnerId);
+    gasPost({
+      action:       'sendAlcadaEmail',
+      to:           approver.email,
+      approverName: approver.name,
+      reqId:        r.id,
+      requester:    r.requester,
+      sector:       r.sector||'—',
+      items:        (r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
+      value:        r.value||0,
+      winnerName:   _winner?.name||'Não definido',
+      winnerValue:  _winner?.totalValue||0,
+      buyerAnalysis:r.quote?.buyerAnalysis||'',
+      requestedBy:  CU.name,
+      date:         new Date().toLocaleString('pt-BR')
+    }).then(function(res){
+      if(res&&res.error) toast('Aviso: '+res.error,'error');
+    });
   }
   closeModal('approverModal');
   toast('Solicitação enviada para '+approver.name+'!','success');
@@ -1469,18 +1491,16 @@ function resolveAlcada(reqId, decision){
   // Notificar o solicitante original via e-mail
   const solicitante=DB.users.find(u=>u.id===r.userId);
   if(GAS_URL&&solicitante&&solicitante.email){
-    fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        action:'sendStatusEmail',
-        to:solicitante.email,
-        userName:solicitante.name,
-        reqId:r.id,
-        items:(r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-        oldStatus:'Aguardando Aprovação de Alçada',
-        newStatus:decision==='aprovada'?'✅ Alçada Aprovada por '+CU.name:'❌ Alçada Rejeitada por '+CU.name,
-        date:new Date().toLocaleDateString('pt-BR')
-      })
-    }).catch(()=>{});
+    gasPost({
+      action:    'sendStatusEmail',
+      to:        solicitante.email,
+      userName:  solicitante.name,
+      reqId:     r.id,
+      items:     (r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
+      oldStatus: 'Aguardando Aprovação de Alçada',
+      newStatus: decision==='aprovada'?'✅ Alçada Aprovada por '+CU.name:'❌ Alçada Rejeitada por '+CU.name,
+      date:      new Date().toLocaleDateString('pt-BR')
+    });
   }
   toast(decision==='aprovada'?'✅ Solicitação aprovada!':'Solicitação rejeitada.',
         decision==='aprovada'?'success':'warning');
