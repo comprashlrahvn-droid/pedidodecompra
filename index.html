@@ -20,7 +20,7 @@
   --r:14px;--rs:8px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-light);min-height:100vh;}
+body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min-height:100vh;}
 .hidden{display:none!important;}
 .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 20px;border-radius:var(--rs);border:none;cursor:pointer;font-family:'Nunito',sans-serif;font-weight:800;font-size:13.5px;transition:all .18s;white-space:nowrap;}
 .btn-green{background:linear-gradient(135deg,var(--green-md),var(--green));color:#fff;box-shadow:0 3px 12px rgba(39,174,96,.3);}
@@ -73,10 +73,10 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .demo-box{display:none;}
 .pend-card{background:#fff;border:1px solid #e8e0c0;border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.06);overflow:hidden;margin-bottom:14px;border-left:4px solid var(--yellow-dk);}
 .pend-card-hdr{padding:14px 18px;background:#fef9e7;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-.pend-card-hdr .pc-id{font-weight:900;font-size:13px;color:var(--navy);}
+.pend-card-hdr .pc-id{font-weight:900;font-size:13px;color:#1a3320;}
 .pend-card-hdr .pc-from{font-size:12px;color:var(--g700);}
 .pend-card-body{padding:16px 18px;}
-.hist-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#1e3322;border-radius:var(--rs);box-shadow:var(--sh-xs);margin-bottom:9px;border-left:4px solid rgba(255,255,255,.1);}
+.hist-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#f0f8f4;border-radius:var(--rs);box-shadow:var(--sh-xs);margin-bottom:9px;border-left:4px solid #c8d8cc;color:#2c3e30;}
 .hist-item.approved{border-left-color:var(--green-md);}
 .hist-item.rejected{border-left-color:var(--red);}
 .hist-item.pending{border-left-color:var(--yellow-dk);}
@@ -109,7 +109,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .notif-btn{position:relative;background:none;border:none;cursor:pointer;font-size:21px;color:var(--g500);}
 .ndot{position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid #fff;display:none;}
 .tbar-logo{height:38px;object-fit:contain;}
-.page-content{padding:24px;flex:1;background:#f0f4f1;}
+.page-content{padding:24px;flex:1;background:#f0f4f1;color:#2c3e30;}
 .section{display:none;} .section.active{display:block;}
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
 .stat-card{background:#fff;border:1px solid #e0e8e2;border-radius:var(--r);padding:18px 20px;box-shadow:0 2px 10px rgba(0,0,0,.06);border-left:5px solid var(--green-md);position:relative;overflow:hidden;cursor:default;}
@@ -149,8 +149,8 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .step-line{flex:1;height:3px;background:var(--g200);margin-top:-36px;}
 .step-line.done{background:var(--green-md);}
 .step-lbl{font-size:8px;font-weight:800;color:var(--g500);text-align:center;margin-top:5px;max-width:72px;line-height:1.3;}
-.step.done .step-lbl,.step.cur .step-lbl{color:var(--navy);}
-.req-card{background:#fff;border:1px solid #e0e8e2;border-radius:var(--r);padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:12px;border-left:5px solid #c8d8cc;}
+.step.done .step-lbl,.step.cur .step-lbl{color:#1a3320;}
+.req-card{background:#fff;border:1px solid #e0e8e2;border-radius:var(--r);padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:12px;border-left:5px solid #c8d8cc;color:#2c3e30;}
 .req-card.urgent{border-left-color:var(--red);}
 .req-card.high{border-left-color:var(--yellow);}
 .req-card.normal{border-left-color:var(--green-md);}
@@ -169,7 +169,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .chat-input-row input::placeholder{color:#99aaa0;}
 .chat-input-row input:focus{outline:none;}
 .chat-send{background:linear-gradient(135deg,var(--green),var(--green-md));color:#fff;border:none;padding:0 16px;cursor:pointer;font-size:17px;}
-.areq-row{background:#fff;border:1px solid #e0e8e2;border-radius:var(--rs);padding:14px 16px;box-shadow:0 2px 6px rgba(0,0,0,.05);margin-bottom:9px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-left:4px solid #c8d8cc;}
+.areq-row{background:#fff;border:1px solid #e0e8e2;border-radius:var(--rs);padding:14px 16px;box-shadow:0 2px 6px rgba(0,0,0,.05);margin-bottom:9px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-left:4px solid #c8d8cc;color:#2c3e30;}
 .areq-row.urg{border-left-color:var(--red);}
 .alert-card{background:#fff8f8;border:1px solid #f0d0d0;border-radius:9px;padding:12px 16px;box-shadow:var(--sh-xs);margin-bottom:9px;display:flex;align-items:center;gap:11px;border-left:4px solid var(--red);}
 .alert-card.stale{background:#fffbf0;border-color:#f0e0a0;border-left-color:var(--yellow);}
@@ -197,7 +197,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .user-card.is-admin{border-left-color:var(--red);}
 .uav{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;color:#fff;flex-shrink:0;}
 .ucard-info{flex:1;min-width:180px;}
-.ucard-name{font-weight:900;font-size:14.5px;color:var(--navy);}
+.ucard-name{font-weight:900;font-size:14.5px;color:#1a3320;}
 .ucard-meta{font-size:12px;color:var(--g500);margin-top:3px;}
 .pending-banner{background:#fef9e7;border:2px solid var(--yellow-dk);border-radius:var(--rs);padding:13px 16px;margin-bottom:16px;display:flex;align-items:center;gap:11px;font-weight:800;font-size:13px;color:#7a5c00;}
 .pending-cnt{background:var(--yellow);color:var(--navy);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0;}
@@ -221,6 +221,15 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 .toast.warning{border-left:4px solid var(--yellow);}
 ::-webkit-scrollbar{width:5px;height:5px;}
 
+
+/* ── SAVING ── */
+.saving-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:900;}
+.saving-pos{background:#d4f0de;color:#1a5530;border:1.5px solid var(--green);}
+.saving-neg{background:#fde8e8;color:#9b1c1a;border:1.5px solid var(--red);}
+.saving-neu{background:#f0f4f1;color:#5a7a60;border:1.5px solid #c8d8cc;}
+.saving-input-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.saving-input-row input,.saving-input-row select{background:#f5f8f5;border:1.5px solid #dce8de;border-radius:7px;padding:7px 10px;font-size:13px;font-family:'Nunito',sans-serif;color:#2c3e30;}
+.saving-input-row input:focus,.saving-input-row select:focus{outline:none;border-color:var(--green);}
 /* ── COTAÇÃO & APROVAÇÃO ── */
 .quote-tab-bar{display:flex;gap:2px;border-bottom:2px solid #dce8de;margin-bottom:16px;}
 .approver-opt{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:9px;border:1.5px solid #dce8de;cursor:pointer;margin-bottom:8px;transition:all .18s;background:#fff;}
@@ -411,7 +420,15 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
           <div><div style="font-weight:900;font-size:13.5px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">&#128680; Alertas de Urg&ecirc;ncia</div><div id="urgAlerts"></div></div>
           <div><div style="font-weight:900;font-size:13.5px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">&#9203; Paradas +7 dias</div><div id="staleAlerts"></div></div>
         </div>
-        <div class="chart-area"><div class="chart-title">&#128101; Solicita&ccedil;&otilde;es por Requisitante</div><div id="byUserChart"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <div class="chart-area"><div class="chart-title">&#128101; Solicita&ccedil;&otilde;es por Requisitante</div><div id="byUserChart"></div></div>
+            <div class="chart-area"><div class="chart-title">&#128200; Saving por Solicita&ccedil;&atilde;o</div><div id="savingChart"></div></div>
+          </div>
+          <div>
+            <div class="chart-area"><div class="chart-title">&#128176; Evolu&ccedil;&atilde;o de Valores por Usu&aacute;rio</div><div id="userValueChart"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- ADMIN GESTÃO -->
@@ -539,23 +556,23 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:var(--text-
 // O GAS requer que o body seja enviado como texto puro (não application/json)
 // quando chamado de outro domínio, pois o CORS do GAS não permite preflight.
 // Usamos Content-Type text/plain para evitar preflight e permitir CORS simples.
-async function gasPost(payload){
-  if(!GAS_URL) return null;
-  try{
-    const resp = await fetch(GAS_URL, {
-      method: 'POST',
-      // text/plain evita preflight OPTIONS — o GAS aceita e faz JSON.parse internamente
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
-      redirect: 'follow'
-    });
-    // GAS redireciona para uma URL com o resultado
-    const text = await resp.text();
-    try{ return JSON.parse(text); }catch(e){ return {success:true}; }
-  }catch(err){
-    console.warn('gasPost error:', err);
-    return null;
-  }
+// gasPost: envia dados ao GAS via XMLHttpRequest síncrono (evita problemas de CORS/redirect)
+// O GAS Web App aceita POST com text/plain e retorna JSON mesmo após redirect 302
+function gasPost(payload){
+  return new Promise(function(resolve){
+    if(!GAS_URL){ resolve(null); return; }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', GAS_URL, true);
+    xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+    xhr.onload = function(){
+      try{ resolve(JSON.parse(xhr.responseText)); }
+      catch(e){ resolve({success:true}); }
+    };
+    xhr.onerror = function(){ resolve(null); };
+    xhr.ontimeout = function(){ resolve(null); };
+    xhr.timeout = 15000;
+    xhr.send(JSON.stringify(payload));
+  });
 }
 // ════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
@@ -634,6 +651,7 @@ async function loadFromGAS(){
         if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
         if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
         if(!r.attachments) r.attachments=[];
+        if(!r.saving) r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
       });
       sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
     }
@@ -887,7 +905,8 @@ function submitReq(){
   const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
     justification:document.getElementById('reqJust').value.trim(),items,value:0,createdAt:new Date().toISOString(),chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
-    alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}};
+    alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''},
+    saving:{value:0,pct:0,obs:'',registeredBy:'',registeredAt:''}};
   // Salvar arquivos anexados diretamente no request
   req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
   DB.requests.push(req); saveDB();
@@ -1015,6 +1034,7 @@ function showDetail(reqId){
     <div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:7px;">💬 Mensagens</div>
     <div class="chat-box"><div class="chat-msgs" id="chatMsgs">${r.chat.map(m=>`<div class="cmsg ${m.from===CU.role||((m.from==='admin'||m.from==='master')&&isAdmin())?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${m.from===CU.role?'r':''}">${m.time} &bull; ${m.from==='user'?r.requester:'Setor Adm.'}</div></div>`).join('')}</div>
     <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
+    ${isMaster()?renderSavingBlock(r):''}
     ${canSeeQuote()?renderQuoteTab(r):''}
   `;
   document.getElementById('detailModal').classList.remove('hidden');
@@ -1056,6 +1076,96 @@ function deleteReq(reqId){
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
 }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+// ── SAVING ────────────────────────────────────────────────────────────────
+
+function renderSavingBlock(r){
+  if(!isMaster()) return '';
+  var sv = r.saving || {value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+  var hasWinner = r.quote && r.quote.winnerId && r.quote.suppliers && r.quote.suppliers.length;
+  var winner = hasWinner ? r.quote.suppliers.find(function(s){ return s.id===r.quote.winnerId; }) : null;
+  var winnerVal = winner ? (winner.totalValue||0) : 0;
+  var reqVal = r.value||0;
+
+  var registered = sv.registeredAt ? true : false;
+
+  var html = '<hr style="border:none;border-top:1.5px solid #dce8de;margin:16px 0;">'
+    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">💰 Saving da Solicitação</div>';
+
+  if(registered){
+    var isPos = sv.value > 0;
+    var isNeg = sv.value < 0;
+    html += '<div style="background:#f5f8f5;border-radius:10px;padding:14px;border:1.5px solid #dce8de;">'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">'
+      + '<span class="saving-badge '+(isPos?'saving-pos':isNeg?'saving-neg':'saving-neu')+'">'
+      + (isPos?'📈 Economia':'📉 Acréscimo')+': R$ '+Math.abs(sv.value).toLocaleString('pt-BR',{minimumFractionDigits:2})
+      + '</span>'
+      + (sv.pct ? '<span style="font-size:13px;font-weight:900;color:'+(isPos?'var(--green)':'var(--red)')+';">'+(isPos?'-':'+')+''+Math.abs(sv.pct)+'%</span>' : '')
+      + '</div>'
+      + (sv.obs ? '<div style="font-size:12.5px;color:#5a7a60;margin-bottom:6px;">'+sv.obs+'</div>' : '')
+      + '<div style="font-size:11px;color:#7a9a80;">Registrado por <strong>'+sv.registeredBy+'</strong> em '+sv.registeredAt+'</div>'
+      + '<button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="editSaving(\'' + r.id + '\')">✏️ Editar</button>'
+      + '</div>';
+  } else {
+    // Sugerir saving automático se tiver vencedor e valor estimado
+    var suggestedSaving = (reqVal > 0 && winnerVal > 0) ? (reqVal - winnerVal) : 0;
+    var suggestedPct = (reqVal > 0 && suggestedSaving !== 0) ? Math.round((suggestedSaving/reqVal)*100) : 0;
+
+    html += '<div id="savingForm_'+r.id+'" style="background:#f5f8f5;border-radius:10px;padding:14px;border:1.5px solid #dce8de;">'
+      + '<div style="font-size:13px;color:#5a7a60;margin-bottom:10px;">Registre a economia (ou acréscimo) gerada nesta solicitação.</div>'
+      + (suggestedSaving !== 0 ? '<div style="background:#e8f5ee;border:1px solid #b0d8c0;border-radius:7px;padding:8px 12px;font-size:12.5px;color:#1a5530;margin-bottom:10px;font-weight:700;">💡 Sugestão automática: R$ '+suggestedSaving.toLocaleString('pt-BR',{minimumFractionDigits:2})+' ('+suggestedPct+'%) com base no valor estimado vs fornecedor vencedor.</div>' : '')
+      + '<div class="saving-input-row">'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Tipo</label>'
+      + '<select id="savingType_'+r.id+'" onchange="updateSavingCalc(this.dataset.rid)" data-rid="'+r.id+'"  >'
+      + '<option value="economia">Economia (saving)</option>'
+      + '<option value="acrescimo">Acréscimo (negativo)</option>'
+      + '</select></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Valor R$</label>'
+      + '<input id="savingVal_'+r.id+'" type="number" min="0" step="0.01" placeholder="0,00" value="'+(suggestedSaving>0?suggestedSaving.toFixed(2):'') +'" oninput="updateSavingCalc(this.dataset.rid)" data-rid="'+r.id+'" style="width:130px;"></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">% sobre estimado</label>'
+      + '<input id="savingPct_'+r.id+'" type="number" min="0" max="100" step="0.1" placeholder="%" value="'+(suggestedPct>0?suggestedPct:'')+'" style="width:80px;" readonly style="background:#eee;"></div>'
+      + '</div>'
+      + '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Observação</label>'
+      + '<input id="savingObs_'+r.id+'" class="fc" placeholder="Ex: Negociação de desconto, prazo melhor..." style="font-size:13px;background:#fff;color:#2c3e30;border:1.5px solid #dce8de;"></div>'
+      + '<button class="btn btn-green btn-sm" style="margin-top:10px;" onclick="saveSaving(this.dataset.rid)" data-rid=\'+r.id+\'>💾 Registrar Saving</button>'
+      + '</div>';
+  }
+  return html;
+}
+
+function updateSavingCalc(reqId){
+  var r = DB.requests.find(function(x){ return x.id===reqId; });
+  if(!r) return;
+  var val = parseFloat(document.getElementById('savingVal_'+reqId)?.value)||0;
+  var reqVal = r.value||0;
+  var pct = reqVal>0 ? Math.round((val/reqVal)*100) : 0;
+  var pctEl = document.getElementById('savingPct_'+reqId);
+  if(pctEl) pctEl.value = pct||'';
+}
+
+function saveSaving(reqId){
+  if(!isMaster()){ toast('Somente Master pode registrar saving.','error'); return; }
+  var r = DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  var tipo = document.getElementById('savingType_'+reqId)?.value||'economia';
+  var val  = parseFloat(document.getElementById('savingVal_'+reqId)?.value)||0;
+  var pct  = parseFloat(document.getElementById('savingPct_'+reqId)?.value)||0;
+  var obs  = (document.getElementById('savingObs_'+reqId)?.value||'').trim();
+  if(!val){ toast('Informe o valor do saving.','error'); return; }
+  r.saving = {
+    value: tipo==='economia' ? val : -val,
+    pct:   tipo==='economia' ? pct : -pct,
+    obs:   obs,
+    registeredBy:  CU.name,
+    registeredAt:  new Date().toLocaleString('pt-BR')
+  };
+  saveDB(); toast('Saving registrado!','success'); showDetail(reqId);
+}
+
+function editSaving(reqId){
+  var r = DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  r.saving = {value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+  showDetail(reqId);
+}
 
 // ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
 
@@ -1520,7 +1630,16 @@ function renderAdminDash(){
     <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Novas (Abertas)</div><div class="stat-val">${pend}</div></div>
     <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>
     <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>
-    ${isMaster()?`<div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-lbl">Usuários Pendentes</div><div class="stat-val">${uPend}</div></div>`:''}`;
+    ${isMaster()?`<div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-lbl">Usuários Pendentes</div><div class="stat-val">${uPend}</div></div>`:''}`;  if(isMaster()){
+    var _sc=totalSaving>=0?'var(--green)':'var(--red)';
+    document.getElementById('adminStats').innerHTML+=
+      '<div class="stat-card" style="border-left-color:'+_sc+';">'
+      +'<span class="stat-icon">'+(totalSaving>=0?'📈':'📉')+'</span>'
+      +'<div class="stat-lbl">Total Saving</div>'
+      +'<div class="stat-val" style="font-size:15px;color:'+_sc+';">R$ '+Math.abs(totalSaving).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>'
+      +'<div class="stat-sub" style="font-size:11px;color:#6b8570;">'+savingCount+' registrada(s)</div></div>';
+  }
+
   const urg2=all.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
   document.getElementById('urgAlerts').innerHTML=!urg2.length?'<div style="color:var(--g500);font-size:13px;padding:10px 0;">Nenhuma urgência ativa.</div>':
     urg2.map(r=>`<div class="alert-card"><span style="font-size:20px;">⚠</span><div style="flex:1"><div style="font-weight:800;font-size:13px;">${r.id} ${urgBadge(r.type)}</div><div style="font-size:11.5px;color:var(--g500);">${r.requester} | ${statusBadge(r.status)}</div></div><button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
@@ -1532,7 +1651,7 @@ function renderAdminDash(){
   // Gráfico por requisitante (contagem)
   const bu={}; all.forEach(r=>{ bu[r.requester]=(bu[r.requester]||0)+1; });
   const mx=Math.max(...Object.values(bu),1);
-  document.getElementById('byUserChart').innerHTML=Object.entries(bu).sort((a,b)=>b[1]-a[1]).map(([u,ct])=>`<div style="display:flex;align-items:center;gap:11px;margin-bottom:9px;"><div style="width:145px;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgba(255,255,255,.8);">${u}</div><div style="flex:1;background:rgba(255,255,255,.06);border-radius:5px;overflow:hidden;height:24px;"><div style="width:${Math.round(ct/mx*100)}%;background:linear-gradient(90deg,var(--green),var(--green-md));height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:7px;min-width:28px;"><span style="color:#fff;font-size:11px;font-weight:900;">${ct}</span></div></div></div>`).join('');
+  document.getElementById('byUserChart').innerHTML=Object.entries(bu).sort((a,b)=>b[1]-a[1]).map(([u,ct])=>`<div style="display:flex;align-items:center;gap:11px;margin-bottom:9px;"><div style="width:145px;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#2c3e30;">${u}</div><div style="flex:1;background:#e8f0ea;border-radius:5px;overflow:hidden;height:24px;"><div style="width:${Math.round(ct/mx*100)}%;background:linear-gradient(90deg,var(--green),var(--green-md));height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:7px;min-width:28px;"><span style="color:#fff;font-size:11px;font-weight:900;">${ct}</span></div></div></div>`).join('');
   // Gráfico NOVO: evolução de valores por usuário
   const buVal={};
   all.forEach(r=>{
@@ -1547,14 +1666,39 @@ function renderAdminDash(){
   if(uvalEl) uvalEl.innerHTML=valE.length?valE.map(([u,v])=>`
     <div style="margin-bottom:14px;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
-        <span style="font-size:12.5px;font-weight:800;color:rgba(255,255,255,.85);">${u}</span>
-        <span style="font-size:13px;font-weight:900;color:var(--green-md);">R$ ${v.value.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+        <span style="font-size:12.5px;font-weight:800;color:#2c3e30;">${u}</span>
+        <span style="font-size:13px;font-weight:900;color:var(--green);">R$ ${v.value.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
       </div>
-      <div style="font-size:10.5px;color:rgba(255,255,255,.4);margin-bottom:5px;">${v.count} solicita&ccedil;&atilde;o${v.count!==1?'s':''} &bull; ${v.finished} finalizada${v.finished!==1?'s':''}</div>
-      <div style="background:rgba(255,255,255,.06);border-radius:5px;height:18px;overflow:hidden;">
+      <div style="font-size:10.5px;color:#6b8570;margin-bottom:5px;">${v.count} solicita&ccedil;&atilde;o${v.count!==1?'s':''} &bull; ${v.finished} finalizada${v.finished!==1?'s':''}</div>
+      <div style="background:#e8f0ea;border-radius:5px;height:18px;overflow:hidden;">
         <div style="width:${Math.round(v.value/mxVal*100)}%;background:linear-gradient(90deg,var(--green-md),#27ae60);height:100%;border-radius:5px;min-width:4px;transition:width .5s;"></div>
       </div>
-    </div>`).join(''):'<div style="color:rgba(255,255,255,.35);font-size:13px;">Sem dados.</div>';
+    </div>`).join(''):'<div style="color:#7a9a80;font-size:13px;">Sem dados.</div>';
+
+  // Gráfico Saving
+  const savEl=document.getElementById('savingChart');
+  if(savEl){
+    const savReqs=DB.requests.filter(r=>r.saving&&r.saving.registeredAt&&r.saving.value!==0)
+      .sort((a,b)=>Math.abs(b.saving.value)-Math.abs(a.saving.value)).slice(0,10);
+    if(savReqs.length){
+      const maxSav=Math.max(...savReqs.map(r=>Math.abs(r.saving.value)));
+      savEl.innerHTML=savReqs.map(r=>{
+        const isPos=r.saving.value>0;
+        const pct=Math.round(Math.abs(r.saving.value)/maxSav*100);
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+          <div style="width:65px;font-size:11px;font-weight:800;color:#5a7a60;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.id}</div>
+          <div style="width:100px;font-size:11px;font-weight:700;color:#2c3e30;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.requester}</div>
+          <div style="flex:1;background:#e8f0ea;border-radius:5px;height:22px;overflow:hidden;">
+            <div style="width:${pct}%;background:${isPos?'linear-gradient(90deg,var(--green-md),var(--green))':'linear-gradient(90deg,#e74c3c,var(--red))'};height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:7px;min-width:55px;">
+              <span style="color:#fff;font-size:11px;font-weight:900;">${isPos?'':'- '}R$ ${Math.abs(r.saving.value).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      savEl.innerHTML='<div style="color:#7a9a80;font-size:13px;text-align:center;padding:16px;">Nenhum saving registrado ainda.</div>';
+    }
+  }
 }
 
 // ── ADMIN LIST ──
