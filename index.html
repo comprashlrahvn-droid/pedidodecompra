@@ -585,7 +585,7 @@ function gasPost(payload){
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4GlS_VtKynZz8hjlgWKdkritgwh6rGX14hoULSHPQt0cxQTuomgpnIsXzSKJhnGisJg/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -1581,55 +1581,77 @@ function selectApprover(userId){
 function confirmRequestAlcada(){
   if(!_alcadaPendingReqId){ toast('Erro interno.','error'); return; }
   if(!_alcadaSelectedUserId){ toast('Selecione um aprovador.','error'); return; }
-  const r=DB.requests.find(x=>x.id===_alcadaPendingReqId); if(!r) return;
-  const approver=DB.users.find(u=>u.id===_alcadaSelectedUserId); if(!approver) return;
+
+  const r = DB.requests.find(x => x.id === _alcadaPendingReqId);
+  if(!r){ toast('Solicitação não encontrada.','error'); return; }
+
+  // Buscar aprovador — comparar como string para evitar type mismatch
+  const approver = DB.users.find(u => String(u.id) === String(_alcadaSelectedUserId));
+  if(!approver){ toast('Aprovador não encontrado.','error'); return; }
+
+  // O e-mail de login É o campo email do usuário — garantir que existe
+  const emailDestino = (approver.email || '').trim();
+  if(!emailDestino){
+    toast('Usuário selecionado não tem e-mail cadastrado.','error');
+    return;
+  }
+
   if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
-  r.alcada.requested=true;
-  r.alcada.requestedAt=new Date().toLocaleString('pt-BR');
-  r.alcada.status='pendente';
-  r.alcada.approverId=approver.id;
-  r.alcada.approverName=approver.name;
-  r.alcada.approverEmail=approver.email;
-  // Notificação interna (badge no sistema)
-  if(!approver.notifications) approver.notifications=[];
+  r.alcada.requested    = true;
+  r.alcada.requestedAt  = new Date().toLocaleString('pt-BR');
+  r.alcada.status       = 'pendente';
+  r.alcada.approverId   = approver.id;
+  r.alcada.approverName = approver.name;
+  r.alcada.approverEmail= emailDestino;
+
+  // Notificação interna
+  if(!approver.notifications) approver.notifications = [];
   approver.notifications.push({
-    id:'N'+Date.now(),
-    type:'alcada',
-    reqId:r.id,
-    msg:'Aprovação de alçada solicitada para a solicitação '+r.id+' ('+r.requester+')',
-    at:new Date().toLocaleString('pt-BR'),
-    read:false
+    id:'N'+Date.now(), type:'alcada', reqId:r.id, read:false,
+    msg:'Aprovação de alçada solicitada para '+r.id+' ('+r.requester+')',
+    at:new Date().toLocaleString('pt-BR')
   });
+
   saveDB();
-  // E-mail via GAS — usa gasPost para garantir envio correto
-  if(GAS_URL&&approver.email){
-    const _winner = (r.quote?.suppliers||[]).find(s=>s.id===r.quote?.winnerId);
-    gasPost({
-      action:       'sendAlcadaEmail',
-      to:           approver.email,
-      approverName: approver.name,
-      reqId:        r.id,
-      requester:    r.requester,
-      sector:       r.sector||'—',
-      items:        (r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-      value:        r.value||0,
-      winnerName:   _winner?.name||'Não definido',
-      winnerValue:  _winner?.totalValue||0,
-      buyerAnalysis:r.quote?.buyerAnalysis||'',
-      requestedBy:  CU.name,
-      date:         new Date().toLocaleString('pt-BR')
-    }).then(function(res){
-      if(res&&res.error){
-        console.warn('GAS sendAlcadaEmail:', res.error);
-        // Não mostrar toast — solicitação já foi salva com sucesso
+  closeModal('approverModal');
+  toast('Solicitação enviada para '+approver.name+' ('+emailDestino+')!','success');
+
+  // ── Enviar e-mail via GAS ────────────────────────────────
+  if(!GAS_URL){
+    toast('GAS não configurado — e-mail não enviado.','error');
+  } else {
+    const _winner = (r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
+    const payload = {
+      action:        'sendAlcadaEmail',
+      to:            emailDestino,
+      approverName:  approver.name,
+      reqId:         r.id,
+      requester:     r.requester,
+      sector:        r.sector||'—',
+      items:         (r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+      value:         r.value||0,
+      winnerName:    _winner ? _winner.name : 'Não definido',
+      winnerValue:   _winner ? (_winner.totalValue||0) : 0,
+      buyerAnalysis: r.quote ? (r.quote.buyerAnalysis||'') : '',
+      requestedBy:   CU.name,
+      date:          new Date().toLocaleString('pt-BR')
+    };
+    console.log('Enviando e-mail de alçada para:', emailDestino, 'payload:', JSON.stringify(payload));
+    gasPost(payload).then(function(res){
+      console.log('GAS sendAlcadaEmail resposta:', JSON.stringify(res));
+      if(res && res.success){
+        toast('📧 E-mail enviado para '+emailDestino,'success');
+      } else if(res && res.error){
+        toast('⚠ Falha no e-mail: '+res.error,'error');
+      } else if(!res){
+        toast('⚠ GAS sem resposta — verifique a URL','error');
       }
     });
   }
-  closeModal('approverModal');
-  toast('Solicitação enviada para '+approver.name+'!','success');
+
   showDetail(_alcadaPendingReqId);
-  _alcadaPendingReqId=null; _alcadaSelectedUserId=null;
-  // Atualiza badge de notificação
+  _alcadaPendingReqId = null;
+  _alcadaSelectedUserId = null;
   updateNotifBadge();
 }
 
