@@ -585,7 +585,7 @@ function gasPost(payload){
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -681,6 +681,14 @@ function loadFromGAS(){
           });
           sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
           gasSetStatus('ok','🟢 Conectado');
+          // Verificar versão do GAS em background
+          gasPost({action:'ping'}).then(function(res){
+            if(res&&res.version){
+              console.log('GAS versão:', res.version);
+            } else {
+              console.log('GAS conectado (versão desconhecida)');
+            }
+          });
         } else {
           gasSetStatus('err','⚠ Erro: '+(data.error||'resposta inválida'));
         }
@@ -1611,7 +1619,10 @@ function confirmRequestAlcada(){
       requestedBy:  CU.name,
       date:         new Date().toLocaleString('pt-BR')
     }).then(function(res){
-      if(res&&res.error) toast('Aviso: '+res.error,'error');
+      if(res&&res.error){
+        console.warn('GAS sendAlcadaEmail:', res.error);
+        // Não mostrar toast — solicitação já foi salva com sucesso
+      }
     });
   }
   closeModal('approverModal');
