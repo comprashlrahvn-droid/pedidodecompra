@@ -263,11 +263,11 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 ::-webkit-scrollbar-track{background:#e8f0ea;}
 @media(max-width:768px){.sidebar{transform:translateX(-100%)}.main-content{margin-left:0}.row2{grid-template-columns:1fr}.stats-grid{grid-template-columns:1fr 1fr}}
 /* GAS sync indicator */
-.gas-status{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.8);}
-.gas-dot{width:7px;height:7px;border-radius:50%;background:var(--g300);}
-.gas-dot.ok{background:var(--green-md);animation:pulse 2s infinite;}
-.gas-dot.err{background:var(--red);}
-.gas-dot.sync{background:var(--yellow-dk);animation:pulse .6s infinite;}
+.gas-status{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;padding:6px 12px;border-radius:8px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.75);width:100%;margin-bottom:6px;}
+.gas-dot{width:8px;height:8px;border-radius:50%;background:#777;flex-shrink:0;}
+.gas-dot.ok{background:#2ecc71;}
+.gas-dot.err{background:#e74c3c;}
+.gas-dot.sync{background:#f1c40f;animation:pulse .6s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .role-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:900;margin-left:6px;}
 .role-master{background:#e0e7ff;color:#3730a3;}
@@ -327,9 +327,12 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
     </div>
     <div class="sb-nav" id="sbNav"></div>
     <div class="sb-foot">
-      <div id="gasStatusBar" class="gas-status" style="margin-bottom:10px;display:none;">
+      <div id="gasStatusBar" class="gas-status" style="display:none;">
         <div class="gas-dot" id="gasDot"></div>
-        <span id="gasLabel">Banco de dados</span>
+        <span id="gasLabel" style="flex:1;">Banco de dados</span>
+        <span onclick="loadFromGAS().then(function(){if(typeof CU!=='undefined'&&CU){buildNav();}})" 
+              title="Reconectar" style="cursor:pointer;font-size:13px;opacity:.7;" 
+              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">↺</span>
       </div>
       <button class="btn btn-outline" style="width:100%;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.2);" onclick="doLogout()">&#128682; Sair</button>
     </div>
@@ -563,19 +566,26 @@ function gasPost(payload){
     if(!GAS_URL){ resolve(null); return; }
     var xhr = new XMLHttpRequest();
     xhr.open('POST', GAS_URL, true);
+    // text/plain evita CORS preflight — GAS aceita e lê e.postData.contents
     xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+    xhr.timeout = 20000;
     xhr.onload = function(){
-      try{ resolve(JSON.parse(xhr.responseText)); }
-      catch(e){ resolve({success:true}); }
+      try{
+        var res = JSON.parse(xhr.responseText);
+        resolve(res);
+      } catch(e){
+        // GAS às vezes retorna HTML de erro em vez de JSON
+        console.warn('gasPost parse error:', xhr.responseText.slice(0,200));
+        resolve({success:true});
+      }
     };
-    xhr.onerror = function(){ resolve(null); };
-    xhr.ontimeout = function(){ resolve(null); };
-    xhr.timeout = 15000;
+    xhr.onerror   = function(){ console.warn('gasPost network error'); resolve(null); };
+    xhr.ontimeout = function(){ console.warn('gasPost timeout'); resolve(null); };
     xhr.send(JSON.stringify(payload));
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4GlS_VtKynZz8hjlgWKdkritgwh6rGX14hoULSHPQt0cxQTuomgpnIsXzSKJhnGisJg/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -621,42 +631,68 @@ let attachedFiles=[];
 // ── GAS SYNC ──
 let gasSyncing=false;
 function gasSetStatus(state,label){
-  const dot=document.getElementById('gasDot');
-  const lbl=document.getElementById('gasLabel');
-  const bar=document.getElementById('gasStatusBar');
+  var dot=document.getElementById('gasDot');
+  var lbl=document.getElementById('gasLabel');
+  var bar=document.getElementById('gasStatusBar');
   if(!dot) return;
   bar.style.display='flex';
   dot.className='gas-dot '+state;
-  lbl.textContent=label||'Banco de dados';
+  lbl.textContent=label||(state==='ok'?'🟢 Conectado':state==='err'?'⚠ Desconectado':'⏳ Conectando...');
 }
-async function syncToGAS(){
+function syncToGAS(){
   if(!GAS_URL||gasSyncing) return;
-  gasSyncing=true; gasSetStatus('sync','Sincronizando...');
-  try{
-    await gasPost({action:'save',data:DB});
-    gasSetStatus('ok','Salvo na nuvem');
-  }catch(e){ gasSetStatus('err','Erro ao salvar'); }
-  finally{ gasSyncing=false; }
-}
-async function loadFromGAS(){
-  if(!GAS_URL) return Promise.resolve();
-  gasSetStatus('sync','Carregando...');
-  try{
-    const r=await fetch(GAS_URL+'?action=load&t='+Date.now());
-    const data=await r.json();
-    if(data&&data.users&&!data.error){
-      DB=data;
-      // Migração: garantir campos cotação em requests legados
-      (DB.requests||[]).forEach(r=>{
-        if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-        if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
-        if(!r.attachments) r.attachments=[];
-        if(!r.saving) r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
-      });
-      sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
+  gasSyncing=true; gasSetStatus('sync','Salvando...');
+  gasPost({action:'save',data:DB}).then(function(res){
+    if(res && res.success){
+      gasSetStatus('ok','🟢 Salvo');
+    } else if(res && res.error){
+      gasSetStatus('err','⚠ '+res.error.slice(0,30));
+    } else {
+      gasSetStatus('ok','🟢 Enviado');
     }
-    gasSetStatus('ok','Carregado da nuvem');
-  }catch(e){ gasSetStatus('err','Usando dados locais'); }
+    gasSyncing=false;
+  }).catch(function(){
+    gasSetStatus('err','⚠ Falha ao salvar');
+    gasSyncing=false;
+  });
+}
+function loadFromGAS(){
+  if(!GAS_URL) return Promise.resolve();
+  gasSetStatus('sync','Conectando...');
+  return new Promise(function(resolve){
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', GAS_URL+'?action=load&t='+Date.now(), true);
+    xhr.timeout = 20000;
+    xhr.onload = function(){
+      try{
+        var data = JSON.parse(xhr.responseText);
+        if(data && data.users && !data.error){
+          DB = data;
+          // Migração: garantir campos em requests legados
+          (DB.requests||[]).forEach(function(r){
+            if(!r.quote)    r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+            if(!r.alcada)   r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+            if(!r.attachments) r.attachments=[];
+            if(!r.saving)   r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+          });
+          // Migração de usuários
+          (DB.users||[]).forEach(function(u){
+            if(!u.notifications) u.notifications=[];
+          });
+          sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
+          gasSetStatus('ok','🟢 Conectado');
+        } else {
+          gasSetStatus('err','⚠ Erro: '+(data.error||'resposta inválida'));
+        }
+      } catch(e){
+        gasSetStatus('err','⚠ Dados locais');
+      }
+      resolve();
+    };
+    xhr.onerror   = function(){ gasSetStatus('err','⚠ Sem conexão'); resolve(); };
+    xhr.ontimeout = function(){ gasSetStatus('err','⚠ Timeout'); resolve(); };
+    xhr.send();
+  });
 }
 
 // ── ITEM MEMORY ──
@@ -1888,16 +1924,27 @@ function viewFile(f){ const ov=document.createElement('div'); ov.className='file
 
 // ── BOOT ──
 window.addEventListener('DOMContentLoaded',function(){
+  // 1. Carregar dados locais como fallback
   const stored=sessionStorage.getItem('hlr_sol_v1');
   if(stored){ try{ const p=JSON.parse(stored); DB.users=p.users||DB.users; DB.requests=p.requests||DB.requests; DB.categories=p.categories||DB.categories; DB.nextId=p.nextId||DB.nextId; DB.statusLabels=p.statusLabels||DB.statusLabels; }catch(e){} }
-  const cu=localStorage.getItem('hlr_cu');
-  if(cu){ try{ const s=JSON.parse(cu); if(s.email&&s.pass){ const u=DB.users.find(x=>x.email===s.email&&x.pass===s.pass&&x.status==='active'); if(u){ CU=u; initApp(); return; } } }catch(e){} }
-  // Garantir campo notifications em todos os usuários
-  DB.users.forEach(u=>{ if(!u.notifications) u.notifications=[]; });
-  document.getElementById('loginPage').classList.remove('hidden');
-  document.getElementById('appPage').classList.add('hidden');
-  if(GAS_URL) document.getElementById('gasStatusBar').style.display='flex';
-});
+  // 2. Mostrar barra de status e iniciar conexão com GAS
+  var gasBar=document.getElementById('gasStatusBar');
+  if(gasBar) gasBar.style.display='flex';
+  if(!GAS_URL){
+    gasSetStatus('err','⚠ GAS não configurado');
+  }
+  // 3. Carregar do GAS ANTES de verificar sessão (garante dados atualizados)
+  loadFromGAS().then(function(){
+    // 4. Garantir campo notifications
+    DB.users.forEach(function(u){ if(!u.notifications) u.notifications=[]; });
+    // 5. Verificar sessão salva
+    const cu=localStorage.getItem('hlr_cu');
+    if(cu){ try{ const s=JSON.parse(cu); if(s.email&&s.pass){ const u=DB.users.find(function(x){ return x.email===s.email&&x.pass===s.pass&&x.status==='active'; }); if(u){ CU=u; initApp(); return; } } }catch(e){} }
+    // 6. Mostrar login
+    document.getElementById('loginPage').classList.remove('hidden');
+    document.getElementById('appPage').classList.add('hidden');
+  }); // fim do loadFromGAS().then()
+}); // fim do DOMContentLoaded
 </script>
 </body>
 </html>
