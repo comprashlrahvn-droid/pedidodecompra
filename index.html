@@ -585,7 +585,7 @@ function gasPost(payload){
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4GlS_VtKynZz8hjlgWKdkritgwh6rGX14hoULSHPQt0cxQTuomgpnIsXzSKJhnGisJg/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -834,7 +834,7 @@ function initApp(){
   buildNav();
   navigate((isAdmin()||isDirecao())?'admin-dash':'dashboard');
   const sid=(isAdmin()||isDirecao())?'admin':CU.id;
-  setTimeout(()=>{ checkNotifs(sid); updatePendingBadge(); },400);
+  setTimeout(()=>{ checkNotifs(sid); updatePendingBadge(); updateNotifBadge(); },600);
   window.addEventListener('beforeunload',()=>saveSnap(sid),{once:true});
   if(GAS_URL){ loadFromGAS().then(()=>{ if(CU){ buildNav(); navigate(isAdmin()?'admin-dash':'dashboard'); } }); }
 }
@@ -1544,6 +1544,933 @@ function removeFile(reqId, fileId){
 
 let _alcadaPendingReqId = null;
 let _alcadaSelectedUserId = null;
+
+function openApproverModal(reqId){
+  if(!isMaster()){ toast('Somente o Administrador Master pode solicitar aprovação.','error'); return; }
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(r.alcada&&r.alcada.requested){ toast('Aprovação já solicitada.','error'); return; }
+  _alcadaPendingReqId = reqId;
+  _alcadaSelectedUserId = null;
+  // Lista usuários ativos exceto o próprio CU
+  const eligible = DB.users.filter(u=>u.status==='active' && u.id!==CU.id);
+  const listEl = document.getElementById('approverList');
+  if(!eligible.length){
+    listEl.innerHTML='<div style="color:#7a9a80;font-size:13px;padding:10px;">Nenhum usuário disponível.</div>';
+  } else {
+    listEl.innerHTML = eligible.map(u=>`
+      <div class="approver-opt" id="aopt_${u.id}" onclick="selectApprover(${u.id})">
+        <div class="av">${(u.name||'?')[0].toUpperCase()}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:13.5px;color:#1a3320;">${u.name}</div>
+          <div style="font-size:11.5px;color:#5a7a60;">${u.email||'—'} &bull; ${u.sector||'—'}</div>
+          <div style="font-size:11px;margin-top:2px;">${u.role==='master'?'<span style="background:#e0e7ff;color:#3730a3;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Master</span>':u.role==='direcao'?'<span style="background:#fde68a;color:#92400e;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Direção</span>':u.role==='admin'?'<span style="background:#dcfce7;color:#166534;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Admin</span>':'<span style="background:#f0f4f1;color:#5a7a60;font-weight:800;font-size:10px;padding:1px 7px;border-radius:6px;">Usuário</span>'}</div>
+        </div>
+      </div>`).join('');
+  }
+  closeModal('detailModal');
+  document.getElementById('approverModal').classList.remove('hidden');
+}
+
+function selectApprover(userId){
+  _alcadaSelectedUserId = userId;
+  document.querySelectorAll('.approver-opt').forEach(el=>el.classList.remove('selected'));
+  const el=document.getElementById('aopt_'+userId);
+  if(el) el.classList.add('selected');
+}
+
+function confirmRequestAlcada(){
+  if(!_alcadaPendingReqId){ toast('Erro interno.','error'); return; }
+  if(!_alcadaSelectedUserId){ toast('Selecione um aprovador.','error'); return; }
+
+  const r = DB.requests.find(x => x.id === _alcadaPendingReqId);
+  if(!r){ toast('Solicitação não encontrada.','error'); return; }
+
+  // Buscar aprovador — comparar como string para evitar type mismatch
+  const approver = DB.users.find(u => String(u.id) === String(_alcadaSelectedUserId));
+  if(!approver){ toast('Aprovador não encontrado.','error'); return; }
+
+  // O e-mail de login É o campo email do usuário — garantir que existe
+  const emailDestino = (approver.email || '').trim();
+  if(!emailDestino){
+    toast('Usuário selecionado não tem e-mail cadastrado.','error');
+    return;
+  }
+
+  if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+  r.alcada.requested    = true;
+  r.alcada.requestedAt  = new Date().toLocaleString('pt-BR');
+  r.alcada.status       = 'pendente';
+  r.alcada.approverId   = approver.id;
+  r.alcada.approverName = approver.name;
+  r.alcada.approverEmail= emailDestino;
+
+  // Notificação interna
+  if(!approver.notifications) approver.notifications = [];
+  approver.notifications.push({
+    id:'N'+Date.now(), type:'alcada', reqId:r.id, read:false,
+    msg:'Aprovação de alçada solicitada para '+r.id+' ('+r.requester+')',
+    at:new Date().toLocaleString('pt-BR')
+  });
+
+  saveDB();
+  closeModal('approverModal');
+  toast('Solicitação enviada para '+approver.name+' ('+emailDestino+')!','success');
+
+  // ── Enviar e-mail via GAS ────────────────────────────────
+  if(!GAS_URL){
+    toast('GAS não configurado — e-mail não enviado.','error');
+  } else {
+    const _winner = (r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
+    const payload = {
+      action:        'sendAlcadaEmail',
+      to:            emailDestino,
+      approverName:  approver.name,
+      reqId:         r.id,
+      requester:     r.requester,
+      sector:        r.sector||'—',
+      items:         (r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+      value:         r.value||0,
+      winnerName:    _winner ? _winner.name : 'Não definido',
+      winnerValue:   _winner ? (_winner.totalValue||0) : 0,
+      buyerAnalysis: r.quote ? (r.quote.buyerAnalysis||'') : '',
+      requestedBy:   CU.name,
+      date:          new Date().toLocaleString('pt-BR')
+    };
+    console.log('Enviando e-mail de alçada para:', emailDestino, 'payload:', JSON.stringify(payload));
+    gasPost(payload).then(function(res){
+      console.log('GAS sendAlcadaEmail resposta:', JSON.stringify(res));
+      if(res && res.success){
+        toast('📧 E-mail enviado para '+emailDestino,'success');
+      } else if(res && res.error){
+        toast('⚠ Falha no e-mail: '+res.error,'error');
+      } else if(!res){
+        toast('⚠ GAS sem resposta — verifique a URL','error');
+      }
+    });
+  }
+
+  showDetail(_alcadaPendingReqId);
+  _alcadaPendingReqId = null;
+  _alcadaSelectedUserId = null;
+  updateNotifBadge();
+}
+
+function resolveAlcada(reqId, decision){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.alcada) return;
+  const isDesignated = r.alcada.approverId===CU.id;
+  if(!isDirecao()&&!isMaster()&&!isDesignated){
+    toast('Sem permissão para aprovar esta solicitação.','error'); return;
+  }
+  const obs=(document.getElementById('alcadaObs')?.value||'').trim();
+  r.alcada.status=decision;
+  r.alcada.approvedBy=CU.name;
+  r.alcada.approvedAt=new Date().toLocaleString('pt-BR');
+  r.alcada.obs=obs;
+  saveDB();
+  // Notificar o solicitante original via e-mail
+  const solicitante=DB.users.find(u=>u.id===r.userId);
+  if(GAS_URL&&solicitante&&solicitante.email){
+    gasPost({
+      action:    'sendStatusEmail',
+      to:        solicitante.email,
+      userName:  solicitante.name,
+      reqId:     r.id,
+      items:     (r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
+      oldStatus: 'Aguardando Aprovação de Alçada',
+      newStatus: decision==='aprovada'?'✅ Alçada Aprovada por '+CU.name:'❌ Alçada Rejeitada por '+CU.name,
+      date:      new Date().toLocaleDateString('pt-BR')
+    });
+  }
+  toast(decision==='aprovada'?'✅ Solicitação aprovada!':'Solicitação rejeitada.',
+        decision==='aprovada'?'success':'warning');
+  updateNotifBadge();
+  showDetail(reqId);
+}
+
+// ── ADMIN DASH ──
+function renderAdminDash(){
+  const all   = DB.requests;
+  const fin   = all.filter(r=>r.status===8).length;
+  const pend  = all.filter(r=>r.status===0).length;
+  const urg   = all.filter(r=>r.type==='IMEDIATA'||r.type==='URGENTE').length;
+  const uPend = DB.users.filter(u=>u.status==='pending').length;
+
+  // Saving totais
+  const totalSaving = all.reduce((acc,r)=>acc+(r.saving&&r.saving.value?r.saving.value:0),0);
+  const savingCount = all.filter(r=>r.saving&&r.saving.registeredAt).length;
+
+  // ── Stat cards ───────────────────────────────────────────
+  let statsHtml = `
+    <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-lbl">Total Solicitações</div><div class="stat-val">${all.length}</div></div>
+    <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Novas (Abertas)</div><div class="stat-val">${pend}</div></div>
+    <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>
+    <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>`;
+  if(isMaster()){
+    statsHtml += `<div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-lbl">Usuários Pendentes</div><div class="stat-val">${uPend}</div></div>`;
+    const sc = totalSaving>=0?'var(--green)':'var(--red)';
+    statsHtml += `<div class="stat-card" style="border-left-color:${sc};">
+      <span class="stat-icon">${totalSaving>=0?'📈':'📉'}</span>
+      <div class="stat-lbl">Total Saving</div>
+      <div class="stat-val" style="font-size:15px;color:${sc};">R$ ${Math.abs(totalSaving).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+      <div class="stat-sub" style="font-size:11px;color:#6b8570;margin-top:2px;">${savingCount} registrada(s)</div>
+    </div>`;
+  }
+  document.getElementById('adminStats').innerHTML = statsHtml;
+
+  // ── Alertas de urgência ───────────────────────────────────
+  const urg2 = all.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
+  const urgEl = document.getElementById('urgAlerts');
+  if(urgEl) urgEl.innerHTML = !urg2.length
+    ? '<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhuma urgência ativa.</div>'
+    : urg2.map(r=>`<div class="alert-card">
+        <span style="font-size:20px;">⚠</span>
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:13px;">${r.id} ${urgBadge(r.type)}</div>
+          <div style="font-size:11.5px;color:#7a9a80;">${r.requester} | ${statusBadge(r.status)}</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
+      </div>`).join('');
+
+  // ── Paradas +7 dias ───────────────────────────────────────
+  const now   = new Date();
+  const stale = all.filter(r=>r.status>0&&r.status<8&&((now-new Date(r.createdAt))/864e5)>7);
+  const stEl  = document.getElementById('staleAlerts');
+  if(stEl) stEl.innerHTML = !stale.length
+    ? '<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhuma parada.</div>'
+    : stale.map(r=>`<div class="alert-card stale">
+        <span style="font-size:20px;">⌛</span>
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:13px;">${r.id}</div>
+          <div style="font-size:11.5px;color:#7a9a80;">${r.requester} | ${Math.floor((now-new Date(r.createdAt))/864e5)}d parado</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
+      </div>`).join('');
+
+  // ── Gráfico: solicitações por requisitante ────────────────
+  const bu = {}; all.forEach(r=>{ bu[r.requester]=(bu[r.requester]||0)+1; });
+  const mxBu = Math.max(...Object.values(bu),1);
+  const buEl = document.getElementById('byUserChart');
+  if(buEl) buEl.innerHTML = !Object.keys(bu).length
+    ? '<div style="color:#7a9a80;font-size:13px;">Sem dados.</div>'
+    : Object.entries(bu).sort((a,b)=>b[1]-a[1]).map(([u,ct])=>`
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="width:130px;font-size:12.5px;font-weight:800;color:#2c3e30;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u}</div>
+        <div style="flex:1;background:#e8f0ea;border-radius:5px;overflow:hidden;height:22px;">
+          <div style="width:${Math.round(ct/mxBu*100)}%;background:linear-gradient(90deg,var(--green-md),var(--green));height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:7px;min-width:22px;">
+            <span style="color:#fff;font-size:11px;font-weight:900;">${ct}</span>
+          </div>
+        </div>
+      </div>`).join('');
+
+  // ── Gráfico: evolução de valores por usuário ──────────────
+  const buVal = {};
+  all.forEach(r=>{
+    if(!buVal[r.requester]) buVal[r.requester]={count:0,value:0,finished:0};
+    buVal[r.requester].count++;
+    buVal[r.requester].value += (r.value||0);
+    if(r.status===8) buVal[r.requester].finished++;
+  });
+  const valE   = Object.entries(buVal).sort((a,b)=>b[1].value-a[1].value);
+  const mxVal  = Math.max(...valE.map(([,v])=>v.value),1);
+  const uvalEl = document.getElementById('userValueChart');
+  if(uvalEl) uvalEl.innerHTML = !valE.length
+    ? '<div style="color:#7a9a80;font-size:13px;">Sem dados.</div>'
+    : valE.map(([u,v])=>`
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+          <span style="font-size:12.5px;font-weight:800;color:#2c3e30;">${u}</span>
+          <span style="font-size:13px;font-weight:900;color:var(--green);">R$ ${v.value.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+        </div>
+        <div style="font-size:10.5px;color:#6b8570;margin-bottom:4px;">${v.count} sol. &bull; ${v.finished} finalizada(s)</div>
+        <div style="background:#e8f0ea;border-radius:5px;height:18px;overflow:hidden;">
+          <div style="width:${Math.round(v.value/mxVal*100)}%;background:linear-gradient(90deg,var(--green-md),var(--green));height:100%;border-radius:5px;min-width:4px;"></div>
+        </div>
+      </div>`).join('');
+
+  // ── Gráfico: saving por solicitação ───────────────────────
+  const savEl  = document.getElementById('savingChart');
+  if(savEl){
+    const savReqs = all.filter(r=>r.saving&&r.saving.registeredAt&&r.saving.value!==0)
+      .sort((a,b)=>Math.abs(b.saving.value)-Math.abs(a.saving.value)).slice(0,10);
+    if(!savReqs.length){
+      savEl.innerHTML='<div style="color:#7a9a80;font-size:13px;text-align:center;padding:16px;">Nenhum saving registrado ainda.</div>';
+    } else {
+      const mxSav = Math.max(...savReqs.map(r=>Math.abs(r.saving.value)));
+      savEl.innerHTML = savReqs.map(r=>{
+        const isPos = r.saving.value>0;
+        const pct   = Math.round(Math.abs(r.saving.value)/mxSav*100);
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+          <div style="width:65px;font-size:11px;font-weight:800;color:#5a7a60;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.id}</div>
+          <div style="width:100px;font-size:11px;font-weight:700;color:#2c3e30;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.requester}</div>
+          <div style="flex:1;background:#e8f0ea;border-radius:5px;height:22px;overflow:hidden;">
+            <div style="width:${pct}%;background:${isPos?'linear-gradient(90deg,var(--green-md),var(--green))':'linear-gradient(90deg,#e74c3c,var(--red))'};height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:7px;min-width:55px;">
+              <span style="color:#fff;font-size:11px;font-weight:900;">${isPos?'':'- '}R$ ${Math.abs(r.saving.value).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ── FORM ──
+function prepForm(){
+  if(!document.getElementById('reqDate').value) document.getElementById('reqDate').value=new Date().toISOString().split('T')[0];
+  if(!document.getElementById('reqName').value) document.getElementById('reqName').value=CU.name;
+  if(document.getElementById('itemsBody').children.length===0) addItem();
+}
+function addItem(){
+  iCount++;
+  const tb=document.getElementById('itemsBody');
+  const tr=document.createElement('tr'); tr.id='ir-'+iCount;
+  const cats=DB.categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+  tr.innerHTML=`<td style="position:relative;"><input type="text" placeholder="Descrição..." id="id-${iCount}" oninput="showSugs('id-${iCount}',document.getElementById('ic-${iCount}').value)" autocomplete="off"></td>
+    <td><input type="number" min="1" value="1" id="iq-${iCount}"></td>
+    <td><select id="ic-${iCount}" onchange="onCatChange('ic-${iCount}','id-${iCount}')"><option value="">Selecione...</option>${cats}</select></td>
+    <td><button class="rm-btn" onclick="removeItem(${iCount})">X</button></td>`;
+  tb.appendChild(tr);
+}
+function removeItem(id){ const tr=document.getElementById('ir-'+id); if(tr&&document.querySelectorAll('#itemsBody tr').length>1) tr.remove(); else toast('Mínimo 1 item.','warning'); }
+function clearForm(){ document.getElementById('itemsBody').innerHTML=''; iCount=0; attachedFiles=[]; document.getElementById('reqType').value=''; document.getElementById('reqJust').value=''; const ap=document.getElementById('attachPrevs'); if(ap) ap.innerHTML=''; addItem(); }
+function handleFiles(input){
+  const pv=document.getElementById('attachPrevs');
+  Array.from(input.files).forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      // Guarda o objeto completo com base64 para persistir no request
+      attachedFiles.push({name:f.name,type:f.type,size:f.size,data:e.target.result,id:'A'+Date.now()+Math.random().toString(36).slice(2)});
+      // Preview visual
+      const wrap=document.createElement('div');
+      wrap.style.cssText='position:relative;display:inline-block;margin:4px;';
+      if(f.type.startsWith('image/')){
+        const img=document.createElement('img');
+        img.src=e.target.result;
+        img.className='attach-prev';
+        img.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px;border:1.5px solid #c8d8cc;cursor:pointer;';
+        img.title=f.name;
+        wrap.appendChild(img);
+      } else {
+        wrap.innerHTML=`<div style="width:56px;height:56px;border-radius:6px;border:1.5px solid #c8d8cc;background:#f0f8f4;display:flex;align-items:center;justify-content:center;font-size:24px;" title="${f.name}">📄</div>`;
+      }
+      const lbl=document.createElement('div');
+      lbl.style.cssText='font-size:9px;color:#5a7a60;text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      lbl.textContent=f.name;
+      wrap.appendChild(lbl);
+      pv.appendChild(wrap);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+function checkUrgency(){ const v=document.getElementById('reqType').value; if(v==='IMEDIATA'||v==='URGENTE') document.getElementById('urgModal').classList.remove('hidden'); }
+function acceptUrg(){ document.getElementById('urgModal').classList.add('hidden'); toast('Urgência confirmada.','warning'); }
+function rejectUrg(){ document.getElementById('urgModal').classList.add('hidden'); document.getElementById('reqType').value=''; toast('Selecione outro tipo.','success'); }
+function submitReq(){
+  const name=document.getElementById('reqName').value.trim();
+  const date=document.getElementById('reqDate').value;
+  const type=document.getElementById('reqType').value;
+  if(!name||!date||!type){ toast('Preencha nome, data e tipo.','error'); return; }
+  const rows=document.querySelectorAll('#itemsBody tr'); const items=[];
+  for(const tr of rows){ const n=tr.id.replace('ir-','');
+    const desc=document.getElementById('id-'+n)?.value.trim();
+    const qty=parseInt(document.getElementById('iq-'+n)?.value)||1;
+    const cat=document.getElementById('ic-'+n)?.value;
+    if(!desc){ toast('Preencha descrição de todos os itens.','error'); return; }
+    items.push({desc,qty,cat}); }
+  const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
+    justification:document.getElementById('reqJust').value.trim(),items,value:0,createdAt:new Date().toISOString(),chat:[],
+    quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
+    alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''},
+    saving:{value:0,pct:0,obs:'',registeredBy:'',registeredAt:''}};
+  // Salvar arquivos anexados diretamente no request
+  req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
+  DB.requests.push(req); saveDB();
+  items.forEach(it=>saveItemMem(it.desc,it.cat));
+  clearForm(); toast('Solicitação '+req.id+' enviada!','success'); navigate('minhas');
+}
+
+// ── BADGES ──
+function urgBadge(t){ return {'IMEDIATA':'<span class="badge badge-red">IMEDIATA</span>','URGENTE':'<span class="badge badge-red">URGENTE</span>','POUCO URGENTE':'<span class="badge badge-yellow">POUCO URGENTE</span>','NAO URGENTE':'<span class="badge badge-green">NÃO URGENTE</span>','NÃO URGENTE':'<span class="badge badge-green">NÃO URGENTE</span>'}[t]||('<span class="badge badge-gray">'+t+'</span>'); }
+function statusBadge(s){ const c=['gray','navy','yellow','yellow','yellow','blue','green','red','green']; return '<span class="badge badge-'+(c[s]||'gray')+'">'+DB.statusLabels[s]+'</span>'; }
+function stepper(cur){ const n=DB.statusLabels.length; let h='<div class="stepper">';
+  for(let i=0;i<n;i++){ const st=i<cur?'done':i===cur?'cur':''; h+=`<div class="step ${st}"><div class="step-dot">${i<cur?'✓':i+1}</div><div class="step-lbl">${DB.statusLabels[i]}</div></div>`; if(i<n-1)h+=`<div class="step-line ${i<cur?'done':''}"></div>`; }
+  return h+'</div>'; }
+
+// ── USER DASHBOARD ──
+function renderUserDash(){
+  const my=DB.requests.filter(r=>r.userId===CU.id);
+  const fin=my.filter(r=>r.status===8).length; const and=my.filter(r=>r.status>0&&r.status<8).length;
+  const urg=my.filter(r=>r.type==='IMEDIATA'||r.type==='URGENTE').length;
+  const val=my.reduce((a,r)=>a+(r.value||0),0);
+  document.getElementById('userStats').innerHTML=`
+    <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-lbl">Total</div><div class="stat-val">${my.length}</div></div>
+    <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>
+    <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Em Andamento</div><div class="stat-val">${and}</div></div>
+    <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>`;
+  document.getElementById('uFinancial').textContent='R$ '+val.toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const now=new Date(); const mc=Array(6).fill(0);
+  my.forEach(r=>{ const d=new Date(r.createdAt||r.date); if(d.getFullYear()===now.getFullYear()){ const off=now.getMonth()-d.getMonth(); if(off>=0&&off<6)mc[5-off]++; }});
+  const mx=Math.max(...mc,1); const clrs=['#c0392b','#e67e22','#f1c40f','#27ae60','#1e8c3a','#2ecc71'];
+  const mn=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  let bars='',labels='';
+  for(let i=0;i<6;i++){ const mi=(now.getMonth()-5+i+12)%12; const h=Math.round((mc[i]/mx)*130);
+    bars+=`<div class="cbar-wrap"><div class="cbar" style="height:${h}px;background:${clrs[i]}"><div class="cbar-tip">${mc[i]} sol.</div></div></div>`;
+    labels+=`<div style="flex:1;text-align:center;font-size:9.5px;color:var(--g500);font-weight:800;">${mn[mi]}</div>`; }
+  document.getElementById('uChartBars').innerHTML=bars; document.getElementById('uChartLabels').innerHTML=labels;
+  const pt=['IMEDIATA','URGENTE','POUCO URGENTE','NÃO URGENTE']; const pc=['var(--red)','var(--yellow-dk)','#3498db','var(--green-md)'];
+  document.getElementById('uPriority').innerHTML=pt.map((p,i)=>{
+    const c=my.filter(r=>r.type===p||r.type==='NAO URGENTE'&&p==='NÃO URGENTE').length;
+    const pct=my.length?Math.round(c/my.length*100):0;
+    return `<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;margin-bottom:3px;"><span>${p}</span><span>${c}</span></div><div style="background:var(--g100);border-radius:20px;height:7px;overflow:hidden;"><div style="width:${pct}%;height:100%;border-radius:20px;background:${pc[i]};transition:width .5s;"></div></div></div>`;
+  }).join('');
+}
+
+// ── MINHAS SOLICITAÇÕES ──
+function switchTab(id,btn){
+  document.getElementById('tab-por-sol').classList.toggle('hidden',id!=='por-sol');
+  document.getElementById('tab-por-item').classList.toggle('hidden',id!=='por-item');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+function renderMySols(){
+  // Usuário vê apenas as suas; admin vê todas
+  const reqs=isAdmin()?DB.requests:DB.requests.filter(r=>r.userId===CU.id);
+  const el=document.getElementById('minhasSols');
+  if(!reqs.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhuma solicitação encontrada.</div>'; return; }
+  el.innerHTML=[...reqs].reverse().map(r=>`<div class="req-card ${r.type==='IMEDIATA'||r.type==='URGENTE'?'urgent':r.type==='POUCO URGENTE'?'high':'normal'}">
+    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px;">
+      <strong style="font-family:'Montserrat',sans-serif;font-size:13px;">${r.id}</strong> ${urgBadge(r.type)} ${statusBadge(r.status)}
+    </div>
+    <div style="font-size:13.5px;font-weight:700;margin-bottom:4px;">${r.items.map(i=>i.desc).join(', ')}</div>
+    <div style="font-size:12px;color:var(--g500);margin-bottom:10px;">${r.requester} &bull; ${r.date} &bull; ${r.items.length} item(s)</div>
+    ${stepper(r.status)}
+    ${r.chat.length?`<div style="font-size:12px;color:var(--g700);margin-top:8px;padding:8px 11px;background:var(--g50);border-radius:6px;border-left:3px solid var(--navy);">💬 Última msg: ${r.chat[r.chat.length-1].msg}</div>`:''}
+    <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver Detalhes</button></div>
+  </div>`).join('');
+}
+function renderMyItems(){
+  const reqs=isAdmin()?DB.requests:DB.requests.filter(r=>r.userId===CU.id);
+  const el=document.getElementById('itensList');
+  const all=reqs.flatMap(r=>r.items.map(it=>({...it,reqId:r.id,status:r.status,type:r.type,requester:r.requester})));
+  if(!all.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhum item.</div>'; return; }
+  el.innerHTML=`<div class="card"><table class="itable"><thead><tr><th>Req.</th><th>Descrição</th><th>Qtd</th><th>Cat.</th><th>Status</th></tr></thead><tbody>`+
+    all.map(it=>`<tr><td><strong>${it.reqId}</strong></td><td>${it.desc}</td><td>${it.qty}</td><td>${it.cat||'-'}</td><td>${statusBadge(it.status)}</td></tr>`).join('')+'</tbody></table></div>';
+}
+
+// ── DETAIL MODAL ──
+function previewAttachment(fileId, reqId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  const f=(r.attachments||[]).find(x=>x.id===fileId); if(!f) return;
+  const win=window.open('','_blank','width=900,height=700,resizable=yes');
+  if(f.type&&f.type.startsWith('image/')){
+    win.document.write(`<!DOCTYPE html><html><head><title>${f.name}</title></head><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${f.data}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body></html>`);
+  } else {
+    win.document.write(`<!DOCTYPE html><html><body style="margin:0;"><embed src="${f.data}" type="${f.type}" width="100%" height="100%" style="position:fixed;inset:0;height:100vh;"></body></html>`);
+  }
+}
+function showDetail(reqId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  const canAdmin=isAdmin();
+  document.getElementById('detailTitle').textContent='Detalhes — '+r.id;
+  document.getElementById('detailBody').innerHTML=`
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;">${urgBadge(r.type)} ${statusBadge(r.status)}</div>
+    ${stepper(r.status)}
+    <div style="margin-top:16px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Requisitante</div>
+    <div>${r.requester} &bull; ${r.date}</div></div>
+    <div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Itens</div>
+    ${r.items.map(it=>`<div style="padding:5px 0;border-bottom:1px solid #eaf0ea;">${it.desc} &times; ${it.qty} ${it.cat?'('+it.cat+')':''}</div>`).join('')}</div>
+    ${r.justification?`<div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Justificativa</div><div style="background:var(--g50);padding:10px 12px;border-radius:7px;font-size:13px;">${r.justification}</div></div>`:''}
+    ${(r.attachments&&r.attachments.length)?`
+    <div style="margin-top:14px;">
+      <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">📎 Anexos da Solicitação</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${r.attachments.map(f=>{
+          const isImg=f.type&&f.type.startsWith('image/');
+          return `<div style="background:#f0f8f4;border:1.5px solid #c8d8cc;border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;max-width:220px;">
+            ${isImg
+              ? `<img src="${f.data}" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid #c8d8cc;" onclick="previewAttachment('${f.id}','${r.id}')" title="Visualizar">`
+              : `<span style="font-size:26px;">📄</span>`}
+            <div style="min-width:0;">
+              <div style="font-weight:800;font-size:12px;color:#2c3e30;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</div>
+              <div style="font-size:10px;color:#7a9a80;">${f.size?Math.round(f.size/1024)+'KB':''}</div>
+              <a href="${f.data}" download="${f.name}" style="font-size:11px;color:var(--green);font-weight:700;text-decoration:none;">⬇ Baixar</a>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:''}
+    ${canAdmin?`<div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Atualizar Status</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <select class="fc" id="dtStatus" style="max-width:240px;">${DB.statusLabels.map((l,i)=>`<option value="${i}" ${i===r.status?'selected':''}>${l}</option>`).join('')}</select>
+      <input class="fc" id="dtValue" type="number" min="0" step="0.01" placeholder="Valor R$" value="${r.value||''}" style="max-width:130px;">
+      <button class="btn btn-green btn-sm" onclick="adminUpdate('${r.id}')">Salvar</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteReq('${r.id}')" style="margin-left:8px;">🗑 Excluir Solicitação</button>
+    </div></div>`:''}
+    <div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:7px;">💬 Mensagens</div>
+    <div class="chat-box"><div class="chat-msgs" id="chatMsgs">${r.chat.map(m=>`<div class="cmsg ${m.from===CU.role||((m.from==='admin'||m.from==='master')&&isAdmin())?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${m.from===CU.role?'r':''}">${m.time} &bull; ${m.from==='user'?r.requester:'Setor Adm.'}</div></div>`).join('')}</div>
+    <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
+    ${isMaster()?renderSavingBlock(r):''}
+    ${canSeeQuote()?renderQuoteTab(r):''}
+  `;
+  document.getElementById('detailModal').classList.remove('hidden');
+  setTimeout(()=>{ const cm=document.getElementById('chatMsgs'); if(cm) cm.scrollTop=cm.scrollHeight; },50);
+}
+function sendChat(reqId){
+  const inp=document.getElementById('chatIn'); if(!inp||!inp.value.trim()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  const now=new Date(); const t=now.toLocaleDateString('pt-BR')+' '+now.toTimeString().slice(0,5);
+  r.chat.push({from:isAdmin()?'admin':'user',msg:inp.value.trim(),time:t});
+  inp.value=''; saveDB(); showDetail(reqId); toast('Mensagem enviada.','success');
+}
+function emailUser(req,oldStatus){
+  if(!GAS_URL) return;
+  const user=DB.users.find(u=>u.id===req.userId);
+  if(!user||!user.email) return;
+  const oldLbl=DB.statusLabels[oldStatus]||('Status '+oldStatus);
+  const newLbl=DB.statusLabels[req.status]||('Status '+req.status);
+  gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
+    items:(req.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
+    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')});
+}
+function adminUpdate(reqId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  const oldStatus=r.status;
+  r.status=parseInt(document.getElementById('dtStatus').value);
+  const v=parseFloat(document.getElementById('dtValue').value);
+  if(!isNaN(v)) r.value=v;
+  if(oldStatus!==r.status) emailUser(r,oldStatus);
+  saveDB(); toast(reqId+': status atualizado.','success'); closeModal('detailModal');
+  if(document.getElementById('sec-admin-gestao').classList.contains('active')) renderAdminList();
+  if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
+}
+function deleteReq(reqId){
+  if(!confirm('Excluir a solicitação '+reqId+' permanentemente? Esta ação não pode ser desfeita.')) return;
+  DB.requests=DB.requests.filter(x=>x.id!==reqId);
+  saveDB(); closeModal('detailModal'); toast(reqId+': solicitação excluída.','warning');
+  if(document.getElementById('sec-admin-gestao').classList.contains('active')) renderAdminList();
+  if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
+}
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+// ── SAVING ────────────────────────────────────────────────────────────────
+
+function renderSavingBlock(r){
+  if(!isMaster()) return '';
+  var sv = r.saving || {value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+  var hasWinner = r.quote && r.quote.winnerId && r.quote.suppliers && r.quote.suppliers.length;
+  var winner = hasWinner ? r.quote.suppliers.find(function(s){ return s.id===r.quote.winnerId; }) : null;
+  var winnerVal = winner ? (winner.totalValue||0) : 0;
+  var reqVal = r.value||0;
+
+  var registered = sv.registeredAt ? true : false;
+
+  var html = '<hr style="border:none;border-top:1.5px solid #dce8de;margin:16px 0;">'
+    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">💰 Saving da Solicitação</div>';
+
+  if(registered){
+    var isPos = sv.value > 0;
+    var isNeg = sv.value < 0;
+    html += '<div style="background:#f5f8f5;border-radius:10px;padding:14px;border:1.5px solid #dce8de;">'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">'
+      + '<span class="saving-badge '+(isPos?'saving-pos':isNeg?'saving-neg':'saving-neu')+'">'
+      + (isPos?'📈 Economia':'📉 Acréscimo')+': R$ '+Math.abs(sv.value).toLocaleString('pt-BR',{minimumFractionDigits:2})
+      + '</span>'
+      + (sv.pct ? '<span style="font-size:13px;font-weight:900;color:'+(isPos?'var(--green)':'var(--red)')+';">'+(isPos?'-':'+')+''+Math.abs(sv.pct)+'%</span>' : '')
+      + '</div>'
+      + (sv.obs ? '<div style="font-size:12.5px;color:#5a7a60;margin-bottom:6px;">'+sv.obs+'</div>' : '')
+      + '<div style="font-size:11px;color:#7a9a80;">Registrado por <strong>'+sv.registeredBy+'</strong> em '+sv.registeredAt+'</div>'
+      + '<button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="editSaving(\'' + r.id + '\')">✏️ Editar</button>'
+      + '</div>';
+  } else {
+    // Sugerir saving automático se tiver vencedor e valor estimado
+    var suggestedSaving = (reqVal > 0 && winnerVal > 0) ? (reqVal - winnerVal) : 0;
+    var suggestedPct = (reqVal > 0 && suggestedSaving !== 0) ? Math.round((suggestedSaving/reqVal)*100) : 0;
+
+    html += '<div id="savingForm_'+r.id+'" style="background:#f5f8f5;border-radius:10px;padding:14px;border:1.5px solid #dce8de;">'
+      + '<div style="font-size:13px;color:#5a7a60;margin-bottom:10px;">Registre a economia (ou acréscimo) gerada nesta solicitação.</div>'
+      + (suggestedSaving !== 0 ? '<div style="background:#e8f5ee;border:1px solid #b0d8c0;border-radius:7px;padding:8px 12px;font-size:12.5px;color:#1a5530;margin-bottom:10px;font-weight:700;">💡 Sugestão automática: R$ '+suggestedSaving.toLocaleString('pt-BR',{minimumFractionDigits:2})+' ('+suggestedPct+'%) com base no valor estimado vs fornecedor vencedor.</div>' : '')
+      + '<div class="saving-input-row">'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Tipo</label>'
+      + '<select id="savingType_'+r.id+'" onchange="updateSavingCalc(this.dataset.rid)" data-rid="'+r.id+'"  >'
+      + '<option value="economia">Economia (saving)</option>'
+      + '<option value="acrescimo">Acréscimo (negativo)</option>'
+      + '</select></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Valor R$</label>'
+      + '<input id="savingVal_'+r.id+'" type="number" min="0" step="0.01" placeholder="0,00" value="'+(suggestedSaving>0?suggestedSaving.toFixed(2):'') +'" oninput="updateSavingCalc(this.dataset.rid)" data-rid="'+r.id+'" style="width:130px;"></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">% sobre estimado</label>'
+      + '<input id="savingPct_'+r.id+'" type="number" min="0" max="100" step="0.1" placeholder="%" value="'+(suggestedPct>0?suggestedPct:'')+'" style="width:80px;" readonly style="background:#eee;"></div>'
+      + '</div>'
+      + '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Observação</label>'
+      + '<input id="savingObs_'+r.id+'" class="fc" placeholder="Ex: Negociação de desconto, prazo melhor..." style="font-size:13px;background:#fff;color:#2c3e30;border:1.5px solid #dce8de;"></div>'
+      + '<button class="btn btn-green btn-sm" style="margin-top:10px;" onclick="saveSaving(this.dataset.rid)" data-rid=\'+r.id+\'>💾 Registrar Saving</button>'
+      + '</div>';
+  }
+  return html;
+}
+
+function updateSavingCalc(reqId){
+  var r = DB.requests.find(function(x){ return x.id===reqId; });
+  if(!r) return;
+  var val = parseFloat(document.getElementById('savingVal_'+reqId)?.value)||0;
+  var reqVal = r.value||0;
+  var pct = reqVal>0 ? Math.round((val/reqVal)*100) : 0;
+  var pctEl = document.getElementById('savingPct_'+reqId);
+  if(pctEl) pctEl.value = pct||'';
+}
+
+function saveSaving(reqId){
+  if(!isMaster()){ toast('Somente Master pode registrar saving.','error'); return; }
+  var r = DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  var tipo = document.getElementById('savingType_'+reqId)?.value||'economia';
+  var val  = parseFloat(document.getElementById('savingVal_'+reqId)?.value)||0;
+  var pct  = parseFloat(document.getElementById('savingPct_'+reqId)?.value)||0;
+  var obs  = (document.getElementById('savingObs_'+reqId)?.value||'').trim();
+  if(!val){ toast('Informe o valor do saving.','error'); return; }
+  r.saving = {
+    value: tipo==='economia' ? val : -val,
+    pct:   tipo==='economia' ? pct : -pct,
+    obs:   obs,
+    registeredBy:  CU.name,
+    registeredAt:  new Date().toLocaleString('pt-BR')
+  };
+  saveDB(); toast('Saving registrado!','success'); showDetail(reqId);
+}
+
+function editSaving(reqId){
+  var r = DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  r.saving = {value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+  showDetail(reqId);
+}
+
+// ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
+
+function renderQuoteTab(r){
+  var q  = r.quote  || {suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  var al = r.alcada || {requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+  var canEdit = isMaster();
+  var items   = r.items || [];
+  var rid = r.id;
+
+  // ── arquivos anexados (orçamentos) ───────────────────────
+  var filesHtml = '';
+  if((q.files||[]).length){
+    filesHtml = '<div style="margin-bottom:14px;">';
+    (q.files||[]).forEach(function(f){
+      var isImg = f.type && f.type.startsWith('image/');
+      var thumb = isImg
+        ? '<img src="'+f.data+'" style="width:48px;height:48px;object-fit:cover;border-radius:5px;border:1px solid #c8d8cc;cursor:pointer;" onclick="openFilePreview(\''+f.id+'\',\''+rid+'\')" title="Visualizar">'
+        : '<span style="font-size:22px;">📄</span>';
+      var sizeKb = f.size ? Math.round(f.size/1024)+'KB' : '';
+      filesHtml += '<div class="file-chip" style="align-items:center;gap:8px;padding:6px 10px;">'
+        + thumb
+        + '<div style="line-height:1.3;">'
+        + '<div style="font-weight:800;font-size:12px;">'+f.name+'</div>'
+        + (sizeKb ? '<div style="font-size:10px;color:#7a9a80;">'+sizeKb+'</div>' : '')
+        + '</div>'
+        + '<a href="'+f.data+'" download="'+f.name+'" title="Baixar" style="color:#1e8c3a;font-size:16px;text-decoration:none;">⬇</a>'
+        + (canEdit ? '<span onclick="removeFile(\''+rid+'\',\''+f.id+'\')" style="cursor:pointer;color:#c0392b;font-size:16px;" title="Remover">×</span>' : '')
+        + '</div>';
+    });
+    filesHtml += '</div>';
+  } else {
+    filesHtml = '<div style="color:#7a9a80;font-size:13px;padding:8px 0;">Nenhum arquivo anexado.</div>';
+  }
+
+  // ── cards de fornecedores ─────────────────────────────────
+  var suppCards = '';
+  if((q.suppliers||[]).length){
+    (q.suppliers||[]).forEach(function(s){
+      var isWinner = s.id===q.winnerId;
+      suppCards += '<div class="supplier-card'+(isWinner?' winner':'')+'"><div class="supplier-card-name">'
+        + (isWinner ? '<span class="winner-crown">👑</span>' : '')
+        + '<span style="flex:1">'+s.name+'</span>'
+        + (s.cnpj ? '<span style="font-size:11px;color:#7a9a80;font-weight:600;">CNPJ: '+s.cnpj+'</span>' : '')
+        + (canEdit&&!isWinner ? '<button class="btn btn-green btn-sm" style="font-size:11px;padding:3px 9px;" onclick="setWinner(\''+rid+'\',\''+s.id+'\')">👑 Vencedor</button>' : '')
+        + (canEdit ? '<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="removeSupplier(\''+rid+'\',\''+s.id+'\')">✕</button>' : '')
+        + '</div>'
+        + '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px;">'
+        + '<div><div style="font-size:10px;color:#7a9a80;font-weight:700;text-transform:uppercase;">Valor Total</div>'
+        + '<div class="supplier-val">R$ '+(s.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div></div>'
+        + (s.payTerm ? '<div><div style="font-size:10px;color:#7a9a80;font-weight:700;text-transform:uppercase;">Prazo Pagamento</div><div style="font-size:13px;font-weight:800;color:#2c3e30;">'+s.payTerm+'</div></div>' : '')
+        + (s.delivTerm ? '<div><div style="font-size:10px;color:#7a9a80;font-weight:700;text-transform:uppercase;">Prazo Entrega</div><div style="font-size:13px;font-weight:800;color:#2c3e30;">'+s.delivTerm+'</div></div>' : '')
+        + '</div>'
+        + (s.obs ? '<div class="supplier-obs">'+s.obs+'</div>' : '')
+        + '</div>';
+    });
+  } else {
+    suppCards = '<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhum fornecedor cadastrado ainda.</div>';
+  }
+
+  // ── formulário adicionar fornecedor ───────────────────────
+  var addSuppForm = '';
+  if(canEdit){
+    var itemInputs = items.map(function(it,i){
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">'
+        + '<div style="flex:2;font-size:13px;font-weight:700;color:#2c3e30;min-width:120px;">'+it.desc+' <span style="color:#7a9a80;">×'+it.qty+'</span></div>'
+        + '<div style="flex:1;min-width:110px;"><input id="nsFornItemVal_'+i+'" class="fc" type="number" min="0" step="0.01" placeholder="Valor unitário R$" style="font-size:13px;"></div>'
+        + '</div>';
+    }).join('');
+    addSuppForm = '<div style="background:#f0f8f4;border-radius:10px;padding:16px;margin-top:10px;">'
+      + '<div style="font-weight:800;font-size:12.5px;color:#2c6040;margin-bottom:12px;">➕ Adicionar Fornecedor</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Nome *</label><input id="nsFornNome" class="fc" placeholder="Ex: Empresa XYZ Ltda" style="margin-top:4px;font-size:13px;"></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">CNPJ</label><input id="nsFornCnpj" class="fc" placeholder="00.000.000/0000-00" style="margin-top:4px;font-size:13px;" oninput="maskCnpj(this)"></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Prazo Pagamento</label><input id="nsFornPagto" class="fc" placeholder="Ex: 30 dias, À vista" style="margin-top:4px;font-size:13px;"></div>'
+      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Prazo Entrega</label><input id="nsFornEntrega" class="fc" placeholder="Ex: 5 dias úteis" style="margin-top:4px;font-size:13px;"></div>'
+      + '</div>'
+      + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">Valores por Item</div>'
+      + '<div id="nsFornItens" style="margin-bottom:10px;">'+itemInputs+'</div>'
+      + '<div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Observações</label><input id="nsFornObs" class="fc" placeholder="Condições especiais, marca, validade..." style="margin-top:4px;font-size:13px;"></div>'
+      + '<button class="btn btn-green btn-sm" onclick="addSupplier(\''+rid+'\','+items.length+')">✔ Adicionar Fornecedor</button>'
+      + '</div>';
+  }
+
+  // ── análise por item ──────────────────────────────────────
+  var itemAnalysis = '';
+  if(!(q.suppliers||[]).length){
+    itemAnalysis = '<div style="color:#7a9a80;font-size:13px;padding:14px;text-align:center;background:#f5f8f5;border-radius:8px;">Cadastre fornecedores na aba Orçamentos para visualizar a análise.</div>';
+  } else {
+    items.forEach(function(it, i){
+      var prices = (q.suppliers||[]).map(function(s){
+        return {suppId:s.id,name:s.name,val:(s.itemValues&&s.itemValues[i])||0,total:((s.itemValues&&s.itemValues[i])||0)*it.qty};
+      }).filter(function(x){ return x.val>0; }).sort(function(a,b){ return a.total-b.total; });
+      if(!prices.length){
+        itemAnalysis += '<div style="background:#f5f8f5;border-radius:9px;padding:12px 14px;margin-bottom:12px;">'
+          + '<div style="font-weight:900;font-size:13px;color:#2c3e30;margin-bottom:4px;">📦 '+it.desc+' <span style="color:#7a9a80;font-weight:600;">× '+it.qty+'</span></div>'
+          + '<div style="color:#7a9a80;font-size:12px;">Sem preços cadastrados.</div></div>';
+        return;
+      }
+      var minTotal = prices[0].total;
+      var rows = prices.map(function(p,pi){
+        var isWin  = p.suppId===q.winnerId;
+        var isBest = pi===0;
+        var diff   = isBest ? 0 : Math.round((p.total/minTotal-1)*100);
+        var rowBg  = isWin?'#f0fbf4':isBest?'#f8fff8':'#fff';
+        var valCol = isWin?'var(--green)':isBest?'#27ae60':'#2c3e30';
+        var badge  = isWin
+          ? '<span style="background:#d4f0de;color:var(--green);font-weight:900;font-size:10px;padding:2px 8px;border-radius:8px;">VENCEDOR</span>'
+          : isBest
+            ? '<span style="background:#fff3cd;color:#916e00;font-weight:800;font-size:10px;padding:2px 8px;border-radius:8px;">MENOR</span>'
+            : '—';
+        return '<tr style="background:'+rowBg+';">'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;font-weight:700;">'+(isWin?'👑 ':isBest?'⭐ ':'')+p.name+'</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:right;font-weight:800;color:'+valCol+';">R$ '+p.val.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:right;font-weight:900;color:'+valCol+';">R$ '+p.total.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:right;font-size:11px;color:'+(diff>0?'#c0392b':'#27ae60')+';">'+(diff>0?'+'+diff+'%':diff===0?'—':diff+'%')+'</td>'
+          + '<td style="padding:7px 10px;border-bottom:1px solid #eaf0ea;text-align:center;">'+badge+'</td>'
+          + '</tr>';
+      }).join('');
+      itemAnalysis += '<div style="background:#fff;border:1.5px solid #dce8de;border-radius:10px;padding:14px;margin-bottom:14px;">'
+        + '<div style="font-weight:900;font-size:13.5px;color:#2c3e30;margin-bottom:10px;">📦 '+it.desc+' <span style="font-size:11px;color:#7a9a80;font-weight:600;">Qtd: '+it.qty+'</span></div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
+        + '<thead><tr>'
+        + '<th style="background:#f0f4f1;padding:7px 10px;text-align:left;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Fornecedor</th>'
+        + '<th style="background:#f0f4f1;padding:7px 10px;text-align:right;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Unit.</th>'
+        + '<th style="background:#f0f4f1;padding:7px 10px;text-align:right;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Total</th>'
+        + '<th style="background:#f0f4f1;padding:7px 10px;text-align:right;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Dif.%</th>'
+        + '<th style="background:#f0f4f1;padding:7px 10px;text-align:center;border-bottom:2px solid #dce8de;font-size:10.5px;font-weight:900;text-transform:uppercase;color:#5a7a60;">Status</th>'
+        + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    });
+  }
+
+  // ── análise do comprador ──────────────────────────────────
+  var buyerHtml = canEdit
+    ? '<textarea id="buyerAnalysisInput" class="fc" rows="3" placeholder="Motivo da escolha, condições negociadas, observações gerais..." style="font-size:13px;">'+(q.buyerAnalysis||'')+'</textarea>'
+      + '<button class="btn btn-green btn-sm" style="margin-top:8px;" onclick="saveBuyerAnalysis(\''+rid+'\')">💾 Salvar Análise</button>'
+    : '<div style="background:#f5f8f5;border-radius:7px;padding:10px 13px;font-size:13px;color:#2c3e30;min-height:48px;">'+(q.buyerAnalysis||'<span style="color:#7a9a80;">Análise não preenchida.</span>')+'</div>';
+
+  // ── winner box ────────────────────────────────────────────
+  var winner = (q.suppliers||[]).find(function(s){ return s.id===q.winnerId; });
+  var winnerBox = '';
+  if(winner){
+    winnerBox = '<div style="margin-top:14px;background:#f0fbf4;border:2px solid var(--green-md);border-radius:9px;padding:14px;">'
+      + '<div style="font-weight:800;font-size:13px;color:#1a5530;margin-bottom:6px;">🏆 Fornecedor Vencedor</div>'
+      + '<div style="font-size:16px;font-weight:900;color:var(--green);">'+winner.name+'</div>'
+      + (winner.cnpj ? '<div style="font-size:12px;color:#5a7a60;margin-top:2px;">CNPJ: '+winner.cnpj+'</div>' : '')
+      + '<div style="font-size:18px;font-weight:900;color:var(--green);margin-top:4px;">R$ '+(winner.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>'
+      + '<div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">'
+      + (winner.payTerm ? '<div style="font-size:12px;color:#5a7a60;">💳 <strong>'+winner.payTerm+'</strong></div>' : '')
+      + (winner.delivTerm ? '<div style="font-size:12px;color:#5a7a60;">🚚 <strong>'+winner.delivTerm+'</strong></div>' : '')
+      + '</div></div>';
+  }
+
+  // ── bloco de alçada ───────────────────────────────────────
+  var alcadaHtml = '';
+  if(al.status==='aprovada'){
+    alcadaHtml = '<div class="alcada-box">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:8px;">✅ Aprovação de Alçada</div>'
+      + '<span class="alcada-badge alcada-aprov">✓ Aprovada</span>'
+      + '<div style="font-size:12px;color:#5a7a60;margin-top:6px;">Aprovado por: <strong>'+al.approvedBy+'</strong> em '+al.approvedAt+'</div>'
+      + (al.obs ? '<div style="font-size:12px;color:#6b8570;margin-top:4px;">'+al.obs+'</div>' : '')
+      + '</div>';
+  } else if(al.status==='rejeitada'){
+    alcadaHtml = '<div class="alcada-box" style="border-color:#e08080;background:#fff5f5;">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:8px;">❌ Aprovação de Alçada</div>'
+      + '<span class="alcada-badge alcada-rejeit">✗ Rejeitada</span>'
+      + '<div style="font-size:12px;color:#7f1d1d;margin-top:6px;">Por: <strong>'+al.approvedBy+'</strong> em '+al.approvedAt+'</div>'
+      + (al.obs ? '<div style="font-size:12px;margin-top:4px;">'+al.obs+'</div>' : '')
+      + '</div>';
+  } else if(al.requested){
+    var canApprove = isDirecao()||isMaster()||(al.approverId&&al.approverId===CU.id);
+    alcadaHtml = '<div class="alcada-box">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:8px;">⏳ Aprovação de Alçada</div>'
+      + '<span class="alcada-badge alcada-pend">⏳ Aguardando aprovação</span>'
+      + (al.approverName ? '<div style="font-size:12.5px;font-weight:800;color:#7a5c00;margin-top:6px;">Enviado para: '+al.approverName+'</div>' : '')
+      + '<div style="font-size:12px;color:#916e00;margin-top:4px;">Solicitado em: '+al.requestedAt+'</div>'
+      + (canApprove ? '<div style="margin-top:14px;background:#fffef8;border:1.5px solid #e8d080;border-radius:9px;padding:14px;">'
+          + '<div style="font-weight:800;font-size:12.5px;color:#7a5c00;margin-bottom:10px;">Sua decisão:</div>'
+          + '<textarea id="alcadaObs" class="fc" placeholder="Observação opcional" rows="2" style="margin-bottom:10px;font-size:13px;background:#fff;color:#2c3e30;border:1.5px solid #dce8de;"></textarea>'
+          + '<div style="display:flex;gap:10px;">'
+          + '<button class="btn btn-green" style="flex:1;justify-content:center;" onclick="resolveAlcada(\''+rid+'\',\'aprovada\')">✅ Aprovar Solicitação</button>'
+          + '<button class="btn btn-danger" style="flex:1;justify-content:center;" onclick="resolveAlcada(\''+rid+'\',\'rejeitada\')">✗ Rejeitar</button>'
+          + '</div></div>' : '')
+      + '</div>';
+  } else {
+    alcadaHtml = '<div class="alcada-box">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:8px;">🔐 Aprovação de Alçada</div>'
+      + '<div style="font-size:13px;color:#7a5c00;margin-bottom:10px;">Selecione o responsável que deverá aprovar esta solicitação.</div>'
+      + (canEdit ? '<button class="btn btn-yellow btn-sm" onclick="openApproverModal(\''+rid+'\')">📤 Solicitar Aprovação de Alçada</button>' : '')
+      + '</div>';
+  }
+
+  // ── montar retorno final ──────────────────────────────────
+  return '<hr style="border:none;border-top:1.5px solid #dce8de;margin:18px 0;">'
+    + '<div class="quote-tab-bar">'
+    + '<button class="quote-tab active" onclick="switchQuoteTab(this,\'qt-orcamentos\')">📎 Orçamentos</button>'
+    + '<button class="quote-tab" onclick="switchQuoteTab(this,\'qt-analise\')">📊 Análise por Item</button>'
+    + '<button class="quote-tab" onclick="switchQuoteTab(this,\'qt-alcada\')">🔐 Aprovação de Alçada</button>'
+    + '</div>'
+
+    // ABA ORÇAMENTOS
+    + '<div id="qt-orcamentos" class="quote-section active">'
+    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">📎 Arquivos Anexados</div>'
+    + filesHtml
+    + (canEdit ? '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:#f0f8f4;border:2px dashed #b0d8c0;border-radius:8px;padding:11px 15px;font-size:13px;font-weight:700;color:#2c6040;margin-bottom:16px;">'
+        + '<span style="font-size:20px;">📎</span>'
+        + '<span>Clique para anexar orçamento (PDF, imagem ou planilha)</span>'
+        + '<input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" multiple style="display:none" onchange="attachQuoteFile(\''+rid+'\',this)">'
+        + '</label>' : '')
+    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">🏢 Fornecedores Cotados</div>'
+    + suppCards
+    + addSuppForm
+    + '</div>'
+
+    // ABA ANÁLISE
+    + '<div id="qt-analise" class="quote-section">'
+    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:12px;">Comparativo por Item</div>'
+    + itemAnalysis
+    + '<div style="margin-top:16px;">'
+    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:7px;">💬 Análise do Comprador</div>'
+    + buyerHtml
+    + '</div>'
+    + winnerBox
+    + '</div>'
+
+    // ABA ALÇADA
+    + '<div id="qt-alcada" class="quote-section">'
+    + alcadaHtml
+    + '</div>';
+}
+
+function switchQuoteTab(btn, tabId){
+  const modal = btn.closest('.modal');
+  modal.querySelectorAll('.quote-tab').forEach(t=>t.classList.remove('active'));
+  modal.querySelectorAll('.quote-section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  const sec = document.getElementById(tabId);
+  if(sec) sec.classList.add('active');
+}
+
+function maskCnpj(el){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length>14) v=v.slice(0,14);
+  v=v.replace(/^(\d{2})(\d)/,'$1.$2')
+     .replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3')
+     .replace(/\.(\d{3})(\d)/,'.$1/$2')
+     .replace(/(\d{4})(\d)/,'$1-$2');
+  el.value=v;
+}
+
+function addSupplier(reqId, numItems){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  const name=(document.getElementById('nsFornNome')?.value||'').trim();
+  if(!name){ toast('Informe o nome do fornecedor.','error'); return; }
+  const cnpj=(document.getElementById('nsFornCnpj')?.value||'').trim();
+  const payTerm=(document.getElementById('nsFornPagto')?.value||'').trim();
+  const delivTerm=(document.getElementById('nsFornEntrega')?.value||'').trim();
+  const obs=(document.getElementById('nsFornObs')?.value||'').trim();
+  // Valores por item
+  const itemValues=[];
+  let totalValue=0;
+  for(let i=0;i<numItems;i++){
+    const v=parseFloat(document.getElementById('nsFornItemVal_'+i)?.value)||0;
+    const qty=(r.items[i]?.qty||1);
+    itemValues.push(v);
+    totalValue+=v*qty;
+  }
+  r.quote.suppliers.push({id:'S'+Date.now(),name,cnpj,payTerm,delivTerm,obs,itemValues,totalValue});
+  saveDB(); toast('Fornecedor adicionado.','success'); showDetail(reqId);
+}
+
+function removeSupplier(reqId, suppId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  if(r.quote.winnerId===suppId) r.quote.winnerId='';
+  r.quote.suppliers=r.quote.suppliers.filter(s=>s.id!==suppId);
+  saveDB(); toast('Fornecedor removido.','success'); showDetail(reqId);
+}
+
+function setWinner(reqId, suppId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  r.quote.winnerId=suppId;
+  saveDB(); toast('Fornecedor vencedor definido!','success'); showDetail(reqId);
+}
+
+function saveBuyerAnalysis(reqId){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  const txt=(document.getElementById('buyerAnalysisInput')?.value||'').trim();
+  r.quote.buyerAnalysis=txt;
+  saveDB(); toast('Análise salva.','success'); showDetail(reqId);
+}
+
+function openFilePreview(fileId, reqId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  const f=(r.quote.files||[]).find(x=>x.id===fileId); if(!f) return;
+  const win=window.open('','_blank','width=900,height=700');
+  if(f.type&&f.type.startsWith('image/')){
+    win.document.write(`<html><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${f.data}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body></html>`);
+  } else {
+    win.document.write(`<html><body style="margin:0;"><embed src="${f.data}" type="${f.type}" width="100%" height="100%" style="position:fixed;inset:0;"></body></html>`);
+  }
+}
+
+function attachQuoteFile(reqId, input){
+  if(!isMaster()) return;
+  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+  if(!r.quote.files) r.quote.files=[];
+  const files=Array.from(input.files);
+  let loaded=0;
+  files.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      r.quote.files.push({id:'F'+Date.now()+Math.random().toString(36).slice(2),name:f.name,data:e.target.result,type:f.type,size:f.size,reqId});
+      loaded++;
+      if(loaded===files.length){ saveDB(); toast(files.length+' arquivo(s) anexado(s).','success'); showDetail(reqId); }
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+function removeFile(reqId, fileId){
+  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
+  r.quote.files=r.quote.files.filter(f=>f.id!==fileId);
+  saveDB(); toast('Arquivo removido.','success'); showDetail(reqId);
+}
 
 function openApproverModal(reqId){
   if(!isMaster()){ toast('Somente o Administrador Master pode solicitar aprovação.','error'); return; }
