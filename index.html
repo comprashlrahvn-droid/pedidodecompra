@@ -232,12 +232,12 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 .saving-input-row input:focus,.saving-input-row select:focus{outline:none;border-color:var(--green);}
 /* ── COTAÇÃO & APROVAÇÃO ── */
 .quote-tab-bar{display:flex;gap:2px;border-bottom:2px solid #dce8de;margin-bottom:16px;}
-.approver-opt{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:9px;border:1.5px solid #dce8de;cursor:pointer;margin-bottom:8px;transition:all .18s;background:#fff;}
-.pass-chip{display:inline-flex;align-items:center;gap:5px;font-family:monospace;font-size:12px;font-weight:700;background:#f0f8f4;border:1.5px solid #c8d8cc;border-radius:6px;padding:3px 9px;color:#1a4a2a;letter-spacing:.5px;cursor:pointer;user-select:all;}
-.pass-chip:hover{background:#d4f0de;border-color:var(--green);}
-.pass-eye{font-size:14px;cursor:pointer;padding:2px 6px;border-radius:5px;border:1px solid #c8d8cc;background:#fff;color:#5a7a60;font-weight:700;}
-.pass-eye:hover{background:#f0f8f4;}
-.approver-opt:hover,.approver-opt.selected{border-color:var(--green);background:#f0fbf4;}
+.approver-opt{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:2px solid #dce8de;cursor:pointer;margin-bottom:9px;transition:all .2s;background:#fff;position:relative;}
+.approver-opt:hover{border-color:var(--green-md);background:#f5fdf7;transform:translateX(3px);}
+.approver-opt.selected{border-color:var(--green);background:#e8f5ee;box-shadow:0 2px 14px rgba(30,140,58,.18);}
+.approver-opt.selected .av{background:var(--green);}
+.approver-opt .sel-check{display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--green);color:#fff;font-size:15px;font-weight:900;align-items:center;justify-content:center;}
+.approver-opt.selected .sel-check{display:flex;}
 .approver-opt .av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-md));display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0;}
 .quote-tab{padding:8px 16px;font-weight:800;font-size:12.5px;cursor:pointer;border:none;background:none;color:#7a9a80;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .18s;font-family:'Nunito',sans-serif;}
 .quote-tab.active{color:var(--green);border-bottom-color:var(--green);}
@@ -420,19 +420,35 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
       <div class="section" id="sec-admin-dash">
         <div class="stats-grid" id="adminStats"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-          <div><div style="font-weight:900;font-size:13.5px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">&#128680; Alertas de Urg&ecirc;ncia</div><div id="urgAlerts"></div></div>
-          <div><div style="font-weight:900;font-size:13.5px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">&#9203; Paradas +7 dias</div><div id="staleAlerts"></div></div>
+          <div>
+            <div style="font-weight:900;font-size:13.5px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">&#128680; Alertas de Urg&ecirc;ncia</div>
+            <div id="urgAlerts"></div>
+          </div>
+          <div>
+            <div style="font-weight:900;font-size:13.5px;margin-bottom:10px;font-family:'Montserrat',sans-serif;">&#9203; Paradas +7 dias</div>
+            <div id="staleAlerts"></div>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
           <div>
-            <div class="chart-area"><div class="chart-title">&#128101; Solicita&ccedil;&otilde;es por Requisitante</div><div id="byUserChart"></div></div>
-            <div class="chart-area"><div class="chart-title">&#128200; Saving por Solicita&ccedil;&atilde;o</div><div id="savingChart"></div></div>
+            <div class="chart-area">
+              <div class="chart-title">&#128101; Solicita&ccedil;&otilde;es por Requisitante</div>
+              <div id="byUserChart"></div>
+            </div>
+            <div class="chart-area" style="margin-top:16px;">
+              <div class="chart-title">&#128200; Saving por Solicita&ccedil;&atilde;o</div>
+              <div id="savingChart"></div>
+            </div>
           </div>
           <div>
-            <div class="chart-area"><div class="chart-title">&#128176; Evolu&ccedil;&atilde;o de Valores por Usu&aacute;rio</div><div id="userValueChart"></div></div>
+            <div class="chart-area">
+              <div class="chart-title">&#128176; Evolu&ccedil;&atilde;o de Valores por Usu&aacute;rio</div>
+              <div id="userValueChart"></div>
+            </div>
           </div>
         </div>
       </div>
+      
 
       <!-- ADMIN GESTÃO -->
       <div class="section" id="sec-admin-gestao">
@@ -571,10 +587,20 @@ function gasPost(payload){
     xhr.timeout = 20000;
     xhr.onload = function(){
       try{
-        var res = JSON.parse(xhr.responseText);
-        resolve(res);
+        // GAS às vezes retorna HTML antes do JSON (redirect)
+        var text = xhr.responseText;
+        // Procurar JSON dentro da resposta
+        var jsonStart = text.lastIndexOf('{');
+        var jsonEnd   = text.lastIndexOf('}');
+        if(jsonStart>=0 && jsonEnd>jsonStart){
+          var jsonStr = text.substring(jsonStart, jsonEnd+1);
+          var res = JSON.parse(jsonStr);
+          resolve(res);
+        } else {
+          console.warn('gasPost: resposta sem JSON:', text.slice(0,200));
+          resolve({success:true});
+        }
       } catch(e){
-        // GAS às vezes retorna HTML de erro em vez de JSON
         console.warn('gasPost parse error:', xhr.responseText.slice(0,200));
         resolve({success:true});
       }
@@ -834,7 +860,18 @@ function initApp(){
   buildNav();
   navigate((isAdmin()||isDirecao())?'admin-dash':'dashboard');
   const sid=(isAdmin()||isDirecao())?'admin':CU.id;
-  setTimeout(()=>{ checkNotifs(sid); updatePendingBadge(); updateNotifBadge(); },600);
+  setTimeout(()=>{
+    checkNotifs(sid);
+    updatePendingBadge();
+    updateNotifBadge();
+    // Notificar alçadas pendentes para este usuário
+    const myAlcadas = DB.requests.filter(r=>
+      r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
+    );
+    if(myAlcadas.length){
+      toast('🔐 Você tem '+myAlcadas.length+' aprovação(ões) de alçada pendente(s)!','warning');
+    }
+  },800);
   window.addEventListener('beforeunload',()=>saveSnap(sid),{once:true});
   if(GAS_URL){ loadFromGAS().then(()=>{ if(CU){ buildNav(); navigate(isAdmin()?'admin-dash':'dashboard'); } }); }
 }
@@ -1402,6 +1439,16 @@ function renderQuoteTab(r){
       + '</div>';
   }
 
+  // Botão adicional: enviar para outro aprovador (múltiplos aprovadores)
+  if(canEdit){
+    alcadaHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #dce8de;">'
+      + '<button class="btn btn-yellow btn-sm" style="width:100%;justify-content:center;" '
+      + 'data-rid="'+rid+'" onclick="openApproverModal(this.dataset.rid)">📤 '
+      + (al.requested?'Enviar para Outro Aprovador':'Solicitar Aprovação de Alçada')
+      + '</button>'
+      + '</div>';
+  }
+
   // ── montar retorno final ──────────────────────────────────
   return '<hr style="border:none;border-top:1.5px solid #dce8de;margin:18px 0;">'
     + '<div class="quote-tab-bar">'
@@ -1548,7 +1595,7 @@ let _alcadaSelectedUserId = null;
 function openApproverModal(reqId){
   if(!isMaster()){ toast('Somente o Administrador Master pode solicitar aprovação.','error'); return; }
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
-  if(r.alcada&&r.alcada.requested){ toast('Aprovação já solicitada.','error'); return; }
+  // Permite múltiplos aprovadores — não bloquear se já solicitado
   _alcadaPendingReqId = reqId;
   _alcadaSelectedUserId = null;
   // Lista usuários ativos exceto o próprio CU
@@ -1597,12 +1644,24 @@ function confirmRequestAlcada(){
   }
 
   if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+  // Guardar histórico de alçadas anteriores
+  if(!r.alcada.history) r.alcada.history = [];
+  if(r.alcada.requestedAt){
+    r.alcada.history.push({
+      approverId: r.alcada.approverId, approverName: r.alcada.approverName,
+      requestedAt: r.alcada.requestedAt, status: r.alcada.status,
+      approvedBy: r.alcada.approvedBy, approvedAt: r.alcada.approvedAt, obs: r.alcada.obs
+    });
+  }
   r.alcada.requested    = true;
   r.alcada.requestedAt  = new Date().toLocaleString('pt-BR');
   r.alcada.status       = 'pendente';
   r.alcada.approverId   = approver.id;
   r.alcada.approverName = approver.name;
   r.alcada.approverEmail= emailDestino;
+  r.alcada.approvedBy   = '';
+  r.alcada.approvedAt   = '';
+  r.alcada.obs          = '';
 
   // Notificação interna
   if(!approver.notifications) approver.notifications = [];
@@ -2332,6 +2391,16 @@ function renderQuoteTab(r){
       + '</div>';
   }
 
+  // Botão adicional: enviar para outro aprovador (múltiplos aprovadores)
+  if(canEdit){
+    alcadaHtml += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #dce8de;">'
+      + '<button class="btn btn-yellow btn-sm" style="width:100%;justify-content:center;" '
+      + 'data-rid="'+rid+'" onclick="openApproverModal(this.dataset.rid)">📤 '
+      + (al.requested?'Enviar para Outro Aprovador':'Solicitar Aprovação de Alçada')
+      + '</button>'
+      + '</div>';
+  }
+
   // ── montar retorno final ──────────────────────────────────
   return '<hr style="border:none;border-top:1.5px solid #dce8de;margin:18px 0;">'
     + '<div class="quote-tab-bar">'
@@ -2475,7 +2544,7 @@ function removeFile(reqId, fileId){
 function openApproverModal(reqId){
   if(!isMaster()){ toast('Somente o Administrador Master pode solicitar aprovação.','error'); return; }
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
-  if(r.alcada&&r.alcada.requested){ toast('Aprovação já solicitada.','error'); return; }
+  // Permite múltiplos aprovadores — não bloquear se já solicitado
   _alcadaPendingReqId = reqId;
   _alcadaSelectedUserId = null;
   // Lista usuários ativos exceto o próprio CU
@@ -2524,12 +2593,24 @@ function confirmRequestAlcada(){
   }
 
   if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+  // Guardar histórico de alçadas anteriores
+  if(!r.alcada.history) r.alcada.history = [];
+  if(r.alcada.requestedAt){
+    r.alcada.history.push({
+      approverId: r.alcada.approverId, approverName: r.alcada.approverName,
+      requestedAt: r.alcada.requestedAt, status: r.alcada.status,
+      approvedBy: r.alcada.approvedBy, approvedAt: r.alcada.approvedAt, obs: r.alcada.obs
+    });
+  }
   r.alcada.requested    = true;
   r.alcada.requestedAt  = new Date().toLocaleString('pt-BR');
   r.alcada.status       = 'pendente';
   r.alcada.approverId   = approver.id;
   r.alcada.approverName = approver.name;
   r.alcada.approverEmail= emailDestino;
+  r.alcada.approvedBy   = '';
+  r.alcada.approvedAt   = '';
+  r.alcada.obs          = '';
 
   // Notificação interna
   if(!approver.notifications) approver.notifications = [];
