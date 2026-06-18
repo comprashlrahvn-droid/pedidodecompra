@@ -330,6 +330,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
       <div id="gasStatusBar" class="gas-status" style="display:none;">
         <div class="gas-dot" id="gasDot"></div>
         <span id="gasLabel" style="flex:1;">Banco de dados</span>
+        <span onclick="testGasVersion()" 
+              title="Testar versão do GAS" style="cursor:pointer;font-size:12px;opacity:.7;margin-right:4px;" 
+              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">🔍</span>
         <span onclick="loadFromGAS().then(function(){if(typeof CU!=='undefined'&&CU){buildNav();}})" 
               title="Reconectar" style="cursor:pointer;font-size:13px;opacity:.7;" 
               onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">↺</span>
@@ -579,39 +582,42 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 // O GAS Web App aceita POST com text/plain e retorna JSON mesmo após redirect 302
 function gasPost(payload){
   return new Promise(function(resolve){
-    if(!GAS_URL){ resolve(null); return; }
+    if(!GAS_URL){ resolve({success:false, error:'GAS_URL não configurado'}); return; }
     var xhr = new XMLHttpRequest();
     xhr.open('POST', GAS_URL, true);
     // text/plain evita CORS preflight — GAS aceita e lê e.postData.contents
     xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
     xhr.timeout = 20000;
     xhr.onload = function(){
+      var text = xhr.responseText || '';
+      console.log('[GAS RAW RESPONSE] status='+xhr.status+' body='+text.slice(0,300));
       try{
-        // GAS às vezes retorna HTML antes do JSON (redirect)
-        var text = xhr.responseText;
-        // Procurar JSON dentro da resposta
-        var jsonStart = text.lastIndexOf('{');
+        // Resposta direta em JSON (caso ideal)
+        var res = JSON.parse(text);
+        resolve(res);
+      } catch(e1){
+        // Tentar extrair JSON de dentro de HTML (página de erro/redirect do GAS)
+        var jsonStart = text.indexOf('{');
         var jsonEnd   = text.lastIndexOf('}');
         if(jsonStart>=0 && jsonEnd>jsonStart){
-          var jsonStr = text.substring(jsonStart, jsonEnd+1);
-          var res = JSON.parse(jsonStr);
-          resolve(res);
-        } else {
-          console.warn('gasPost: resposta sem JSON:', text.slice(0,200));
-          resolve({success:true});
+          try{
+            var res2 = JSON.parse(text.substring(jsonStart, jsonEnd+1));
+            resolve(res2);
+            return;
+          }catch(e2){}
         }
-      } catch(e){
-        console.warn('gasPost parse error:', xhr.responseText.slice(0,200));
-        resolve({success:true});
+        // Não foi possível extrair JSON — reportar falha real, sem mentir sucesso
+        console.warn('gasPost: resposta inválida do GAS:', text.slice(0,300));
+        resolve({success:false, error:'Resposta inesperada do GAS (HTTP '+xhr.status+'). Verifique se reimplantou a versão mais recente.', raw:text.slice(0,200)});
       }
     };
-    xhr.onerror   = function(){ console.warn('gasPost network error'); resolve(null); };
-    xhr.ontimeout = function(){ console.warn('gasPost timeout'); resolve(null); };
+    xhr.onerror   = function(){ console.warn('gasPost network error'); resolve({success:false, error:'Erro de rede ao contatar o GAS'}); };
+    xhr.ontimeout = function(){ console.warn('gasPost timeout'); resolve({success:false, error:'Tempo esgotado ao contatar o GAS'}); };
     xhr.send(JSON.stringify(payload));
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4GlS_VtKynZz8hjlgWKdkritgwh6rGX14hoULSHPQt0cxQTuomgpnIsXzSKJhnGisJg/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -671,10 +677,8 @@ function syncToGAS(){
   gasPost({action:'save',data:DB}).then(function(res){
     if(res && res.success){
       gasSetStatus('ok','🟢 Salvo');
-    } else if(res && res.error){
-      gasSetStatus('err','⚠ '+res.error.slice(0,30));
     } else {
-      gasSetStatus('ok','🟢 Enviado');
+      gasSetStatus('err','⚠ '+(res&&res.error?res.error.slice(0,40):'Falha ao salvar'));
     }
     gasSyncing=false;
   }).catch(function(){
@@ -709,10 +713,11 @@ function loadFromGAS(){
           gasSetStatus('ok','🟢 Conectado');
           // Verificar versão do GAS em background
           gasPost({action:'ping'}).then(function(res){
-            if(res&&res.version){
-              console.log('GAS versão:', res.version);
+            if(res && res.version){
+              console.log('GAS versão:', res.version, '— suporta:', res.supports);
             } else {
-              console.log('GAS conectado (versão desconhecida)');
+              console.warn('⚠ GAS conectado mas SEM resposta de versão — pode estar com código desatualizado!');
+              toast('⚠ Atenção: o GAS pode estar desatualizado. Reimplante a versão mais recente do código.','error');
             }
           });
         } else {
@@ -1136,7 +1141,13 @@ function emailUser(req,oldStatus){
   const newLbl=DB.statusLabels[req.status]||('Status '+req.status);
   gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
     items:(req.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')});
+    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')}
+  ).then(function(res){
+    if(!res || !res.success){
+      console.warn('Falha ao enviar e-mail de status:', res&&res.error);
+      toast('⚠ E-mail de notificação não enviado: '+(res&&res.error?res.error:'verifique o GAS'),'error');
+    }
+  });
 }
 function adminUpdate(reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
@@ -1157,6 +1168,21 @@ function deleteReq(reqId){
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
 }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+function testGasVersion(){
+  if(!GAS_URL){ toast('GAS_URL não está configurado no código.','error'); return; }
+  toast('Testando conexão com o GAS...','info');
+  gasPost({action:'ping'}).then(function(res){
+    console.log('[TESTE GAS] resposta completa:', JSON.stringify(res));
+    if(res && res.version){
+      toast('✅ GAS conectado — versão '+res.version+' (suporta: '+(res.supports||[]).join(', ')+')','success');
+    } else if(res && res.status==='ok'){
+      toast('⚠ GAS responde mas SEM informar versão — provavelmente desatualizado. Reimplante o código mais recente.','error');
+    } else {
+      toast('❌ GAS não respondeu corretamente: '+(res&&res.error?res.error:'sem resposta válida')+'. Verifique a URL e a implantação.','error');
+    }
+  });
+}
 
 // ── SAVING ────────────────────────────────────────────────────────────────
 
@@ -1700,10 +1726,10 @@ function confirmRequestAlcada(){
       console.log('GAS sendAlcadaEmail resposta:', JSON.stringify(res));
       if(res && res.success){
         toast('📧 E-mail enviado para '+emailDestino,'success');
-      } else if(res && res.error){
-        toast('⚠ Falha no e-mail: '+res.error,'error');
-      } else if(!res){
-        toast('⚠ GAS sem resposta — verifique a URL','error');
+      } else {
+        var msg = (res && res.error) ? res.error : 'Sem resposta do GAS';
+        toast('⚠ Falha no e-mail: '+msg,'error');
+        console.error('Detalhe da falha de e-mail:', res);
       }
     });
   }
@@ -2088,7 +2114,13 @@ function emailUser(req,oldStatus){
   const newLbl=DB.statusLabels[req.status]||('Status '+req.status);
   gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
     items:(req.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')});
+    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')}
+  ).then(function(res){
+    if(!res || !res.success){
+      console.warn('Falha ao enviar e-mail de status:', res&&res.error);
+      toast('⚠ E-mail de notificação não enviado: '+(res&&res.error?res.error:'verifique o GAS'),'error');
+    }
+  });
 }
 function adminUpdate(reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
@@ -2109,6 +2141,21 @@ function deleteReq(reqId){
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
 }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+function testGasVersion(){
+  if(!GAS_URL){ toast('GAS_URL não está configurado no código.','error'); return; }
+  toast('Testando conexão com o GAS...','info');
+  gasPost({action:'ping'}).then(function(res){
+    console.log('[TESTE GAS] resposta completa:', JSON.stringify(res));
+    if(res && res.version){
+      toast('✅ GAS conectado — versão '+res.version+' (suporta: '+(res.supports||[]).join(', ')+')','success');
+    } else if(res && res.status==='ok'){
+      toast('⚠ GAS responde mas SEM informar versão — provavelmente desatualizado. Reimplante o código mais recente.','error');
+    } else {
+      toast('❌ GAS não respondeu corretamente: '+(res&&res.error?res.error:'sem resposta válida')+'. Verifique a URL e a implantação.','error');
+    }
+  });
+}
 
 // ── SAVING ────────────────────────────────────────────────────────────────
 
@@ -2649,10 +2696,10 @@ function confirmRequestAlcada(){
       console.log('GAS sendAlcadaEmail resposta:', JSON.stringify(res));
       if(res && res.success){
         toast('📧 E-mail enviado para '+emailDestino,'success');
-      } else if(res && res.error){
-        toast('⚠ Falha no e-mail: '+res.error,'error');
-      } else if(!res){
-        toast('⚠ GAS sem resposta — verifique a URL','error');
+      } else {
+        var msg = (res && res.error) ? res.error : 'Sem resposta do GAS';
+        toast('⚠ Falha no e-mail: '+msg,'error');
+        console.error('Detalhe da falha de e-mail:', res);
       }
     });
   }
