@@ -866,16 +866,15 @@ function initApp(){
   navigate((isAdmin()||isDirecao())?'admin-dash':'dashboard');
   const sid=(isAdmin()||isDirecao())?'admin':CU.id;
   setTimeout(()=>{
-    checkNotifs(sid);
     updatePendingBadge();
     updateNotifBadge();
-    // Notificar alçadas pendentes para este usuário
+    // Mostrar automaticamente o painel de novidades se houver algo relevante
+    const diff = buildSnapDiff(sid);
     const myAlcadas = DB.requests.filter(r=>
       r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
     );
-    if(myAlcadas.length){
-      toast('🔐 Você tem '+myAlcadas.length+' aprovação(ões) de alçada pendente(s)!','warning');
-    }
+    const hasNews = diff.statusUpdates.length || diff.newMsgs.length || diff.newReqs.length || myAlcadas.length;
+    if(hasNews) showNotifs();
   },800);
   window.addEventListener('beforeunload',()=>saveSnap(sid),{once:true});
   if(GAS_URL){ loadFromGAS().then(()=>{ if(CU){ buildNav(); navigate(isAdmin()?'admin-dash':'dashboard'); } }); }
@@ -2971,43 +2970,134 @@ function toast(msg,type='success'){ const c=document.getElementById('toastWrap')
   const ic={success:'✓',error:'✗',warning:'!'}; t.innerHTML='<span>'+ic[type]+'</span>'+msg; c.appendChild(t);
   setTimeout(()=>{ t.style.animation='tIn .25s ease reverse'; setTimeout(()=>t.remove(),250); },3500); }
 
-function showNotifs(){
-  const mbody=document.getElementById('notifBody');
-  if(!mbody){ document.getElementById('notifModal').classList.remove('hidden'); return; }
-  const urgent=DB.requests.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
-  const alcadas=CU?DB.requests.filter(r=>r.alcada&&r.alcada.status==='pendente'&&r.alcada.approverId===CU.id):[];
-  let html='';
-  if(alcadas.length){
-    html+=`<div style="font-weight:800;font-size:12px;color:#916e00;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">🔐 Aprovações de Alçada Pendentes</div>`;
-    html+=alcadas.map(r=>`
-      <div style="background:#fff8f0;border:1.5px solid #f0c060;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">
-        <div style="flex:1;">
-          <div style="font-weight:900;font-size:13px;color:#1a3320;">${r.id} — ${r.requester}</div>
-          <div style="font-size:11.5px;color:#7a5c00;margin-top:2px;">Solicitado em: ${r.alcada.requestedAt}</div>
-          <div style="font-size:11.5px;color:#5a7a60;margin-top:1px;">${(r.items||[]).map(i=>i.desc+' ×'+i.qty).join(', ')}</div>
-        </div>
-        <button class="btn btn-green btn-sm" onclick="closeModal('notifModal');showDetail('${r.id}')">Ver →</button>
-      </div>`).join('');
+function buildSnapDiff(id){
+  // Retorna {statusUpdates, newMsgs, newReqs} comparando snapshot salvo com o estado atual
+  let raw; try{ raw=localStorage.getItem(snapKey(id)); }catch(e){}
+  const result = { statusUpdates:[], newMsgs:[], newReqs:[] };
+  if(!raw) return result;
+  let snap; try{ snap=JSON.parse(raw); }catch(e){ return result; }
+  const isAdminView = (id==='admin');
+
+  if(isAdminView){
+    const prevTotal = snap.__total||0;
+    DB.requests.slice(prevTotal).forEach(r=>result.newReqs.push(r));
+    DB.requests.slice(0,prevTotal).forEach(r=>{
+      const prev = snap[r.id]; if(!prev) return;
+      const userMsgCount = r.chat.length>prev.chatCount
+        ? r.chat.slice(prev.chatCount).filter(m=>m.from==='user').length : 0;
+      if(userMsgCount>0) result.newMsgs.push({req:r, count:userMsgCount, from:'usuário'});
+    });
+  } else {
+    DB.requests.filter(r=>r.userId===id).forEach(r=>{
+      const prev = snap[r.id]; if(!prev) return;
+      if(prev.status !== r.status){
+        result.statusUpdates.push({req:r, prevStatus:prev.status, newStatus:r.status});
+      }
+      const adminMsgCount = r.chat.length>prev.chatCount
+        ? r.chat.slice(prev.chatCount).filter(m=>m.from==='admin'||m.from==='master'||m.from==='direcao').length : 0;
+      if(adminMsgCount>0) result.newMsgs.push({req:r, count:adminMsgCount, from:'setor de Compras'});
+    });
   }
-  if(urgent.length){
-    html+=`<div style="font-weight:800;font-size:12px;color:#c0392b;text-transform:uppercase;letter-spacing:.4px;margin:${alcadas.length?'14px':0} 0 8px;">⚠ Solicitações Urgentes</div>`;
-    html+=urgent.map(r=>`
-      <div style="background:#fff5f5;border:1.5px solid #f0a0a0;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">
-        <div style="flex:1;">
-          <div style="font-weight:900;font-size:13px;color:#1a3320;">${r.id} — ${r.requester}</div>
-          <div style="font-size:11.5px;color:#c0392b;margin-top:2px;">${r.type}</div>
-        </div>
-        ${isAdmin()?`<button class="btn btn-outline btn-sm" onclick="closeModal('notifModal');showDetail('${r.id}')">Ver →</button>`:''}
-      </div>`).join('');
-  }
-  if(!alcadas.length&&!urgent.length){
-    html=`<div style="text-align:center;padding:24px;color:#7a9a80;"><div style="font-size:32px;margin-bottom:8px;">✅</div><div style="font-size:13px;font-weight:700;">Sem notificações pendentes.</div></div>`;
-  }
-  mbody.innerHTML=html;
-  document.getElementById('notifModal').classList.remove('hidden');
+  return result;
 }
 
-// ── VIEW FILE ──
+function showNotifs(){
+  const mbody = document.getElementById('notifBody');
+  if(!mbody){ document.getElementById('notifModal').classList.remove('hidden'); return; }
+
+  const sid = (isAdmin()||isDirecao()) ? 'admin' : (CU?CU.id:null);
+  const diff = sid!==null ? buildSnapDiff(sid) : {statusUpdates:[],newMsgs:[],newReqs:[]};
+
+  const urgent  = DB.requests.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
+  const alcadas = CU ? DB.requests.filter(r=>r.alcada&&r.alcada.status==='pendente'&&String(r.alcada.approverId)===String(CU.id)) : [];
+
+  let html = '';
+
+  // ── 1. Aprovações de alçada pendentes ──────────────────────
+  if(alcadas.length){
+    html += '<div style="font-weight:800;font-size:12px;color:#916e00;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">🔐 Aprovações de Alçada Pendentes</div>';
+    html += alcadas.map(function(r){
+      return '<div style="background:#fff8f0;border:1.5px solid #f0c060;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">'
+        + '<div style="flex:1;">'
+        + '<div style="font-weight:900;font-size:13px;color:#1a3320;">'+r.id+' — '+r.requester+'</div>'
+        + '<div style="font-size:11.5px;color:#7a5c00;margin-top:2px;">Solicitado em: '+r.alcada.requestedAt+'</div>'
+        + '<div style="font-size:11.5px;color:#5a7a60;margin-top:1px;">'+(r.items||[]).map(function(i){return i.desc+' ×'+i.qty;}).join(', ')+'</div>'
+        + '</div>'
+        + '<button class="btn btn-green btn-sm" onclick="closeModal(\'notifModal\');showDetail(\''+r.id+'\')">Ver →</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  // ── 2. Mudanças de status (usuário) ────────────────────────
+  if(diff.statusUpdates.length){
+    html += '<div style="font-weight:800;font-size:12px;color:#1e8c3a;text-transform:uppercase;letter-spacing:.4px;margin:'+(html?'14px':'0')+' 0 8px;">🔄 Status Atualizado</div>';
+    html += diff.statusUpdates.map(function(u){
+      var r = u.req;
+      return '<div style="background:#f0fbf4;border:1.5px solid #b0d8c0;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">'
+        + '<div style="flex:1;">'
+        + '<div style="font-weight:900;font-size:13px;color:#1a3320;">'+r.id+'</div>'
+        + '<div style="font-size:12px;color:#1a5530;margin-top:3px;"><strong>'+(DB.statusLabels[u.prevStatus]||'—')+'</strong> &rarr; <strong>'+(DB.statusLabels[u.newStatus]||'—')+'</strong></div>'
+        + '</div>'
+        + '<button class="btn btn-green btn-sm" onclick="closeModal(\'notifModal\');showDetail(\''+r.id+'\')">Ver →</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  // ── 3. Novas mensagens no chat ─────────────────────────────
+  if(diff.newMsgs.length){
+    html += '<div style="font-weight:800;font-size:12px;color:#1f6feb;text-transform:uppercase;letter-spacing:.4px;margin:'+(html?'14px':'0')+' 0 8px;">💬 Novas Mensagens</div>';
+    html += diff.newMsgs.map(function(m){
+      var r = m.req;
+      return '<div style="background:#eef5ff;border:1.5px solid #b8d4f5;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">'
+        + '<div style="flex:1;">'
+        + '<div style="font-weight:900;font-size:13px;color:#1a3320;">'+r.id+' — '+r.requester+'</div>'
+        + '<div style="font-size:12px;color:#1f6feb;margin-top:3px;">'+m.count+' nova(s) mensagem(ns) do '+m.from+'</div>'
+        + '</div>'
+        + '<button class="btn btn-outline btn-sm" onclick="closeModal(\'notifModal\');showDetail(\''+r.id+'\')">Ver →</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  // ── 4. Novas solicitações (visão admin) ────────────────────
+  if(diff.newReqs.length){
+    html += '<div style="font-weight:800;font-size:12px;color:#d4ac0d;text-transform:uppercase;letter-spacing:.4px;margin:'+(html?'14px':'0')+' 0 8px;">🆕 Novas Solicitações</div>';
+    html += diff.newReqs.map(function(r){
+      return '<div style="background:#fffdf0;border:1.5px solid #e8d080;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">'
+        + '<div style="flex:1;">'
+        + '<div style="font-weight:900;font-size:13px;color:#1a3320;">'+r.id+' — '+r.requester+'</div>'
+        + '<div style="font-size:11.5px;color:#7a5c00;margin-top:2px;">'+(r.items&&r.items[0]?r.items[0].desc:'')+(r.items&&r.items.length>1?' + '+(r.items.length-1)+' item(s)':'')+'</div>'
+        + '</div>'
+        + '<button class="btn btn-outline btn-sm" onclick="closeModal(\'notifModal\');showDetail(\''+r.id+'\')">Ver →</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  // ── 5. Urgências em aberto ──────────────────────────────────
+  if(urgent.length){
+    html += '<div style="font-weight:800;font-size:12px;color:#c0392b;text-transform:uppercase;letter-spacing:.4px;margin:'+(html?'14px':'0')+' 0 8px;">⚠ Solicitações Urgentes</div>';
+    html += urgent.map(function(r){
+      return '<div style="background:#fff5f5;border:1.5px solid #f0a0a0;border-radius:9px;padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;">'
+        + '<div style="flex:1;">'
+        + '<div style="font-weight:900;font-size:13px;color:#1a3320;">'+r.id+' — '+r.requester+'</div>'
+        + '<div style="font-size:11.5px;color:#c0392b;margin-top:2px;">'+r.type+'</div>'
+        + '</div>'
+        + (isAdmin() ? '<button class="btn btn-outline btn-sm" onclick="closeModal(\'notifModal\');showDetail(\''+r.id+'\')">Ver →</button>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  if(!html){
+    html = '<div style="text-align:center;padding:24px;color:#7a9a80;"><div style="font-size:32px;margin-bottom:8px;">✅</div><div style="font-size:13px;font-weight:700;">Sem notificações pendentes.</div></div>';
+  }
+
+  mbody.innerHTML = html;
+  document.getElementById('notifModal').classList.remove('hidden');
+
+  // Atualiza o snapshot para esta sessão, assim a próxima abertura só mostra o que for novo
+  if(sid!==null) saveSnap(sid);
+}
+
+// ── VIEW FILE ──// ── VIEW FILE ──
 function viewFile(f){ const ov=document.createElement('div'); ov.className='file-viewer-overlay'; ov.onclick=e=>{ if(e.target===ov) ov.remove(); }; ov.innerHTML=`<div class="file-viewer-inner"><button class="file-viewer-close" onclick="this.closest('.file-viewer-overlay').remove()">✕ Fechar</button><img src="${f.data}" alt="${f.name}"></div>`; document.body.appendChild(ov); }
 
 // ── BOOT ──
