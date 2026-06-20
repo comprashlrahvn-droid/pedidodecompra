@@ -395,6 +395,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
         <span onclick="testGasVersion()" 
               title="Testar versão do GAS" style="cursor:pointer;font-size:12px;opacity:.7;margin-right:4px;" 
               onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">🔍</span>
+        <span onclick="forceSyncGAS()" 
+              title="Forçar sincronização (migrar para novo formato)" style="cursor:pointer;font-size:12px;opacity:.7;margin-right:4px;" 
+              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">⬆</span>
         <span onclick="loadFromGAS().then(function(){if(typeof CU!=='undefined'&&CU){buildNav();}})" 
               title="Reconectar" style="cursor:pointer;font-size:13px;opacity:.7;" 
               onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">↺</span>
@@ -679,7 +682,7 @@ function gasPost(payload){
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4GlS_VtKynZz8hjlgWKdkritgwh6rGX14hoULSHPQt0cxQTuomgpnIsXzSKJhnGisJg/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzNbVzRgNqfNz1_KjFE1kgHrJaHYqOIEg3DGIBYc7iHAEvtInVruEXUgBybV7PSCjnYlg/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -748,50 +751,56 @@ function syncToGAS(){
     gasSyncing=false;
   });
 }
+function migrarRequisicoes(requests){
+  (requests||[]).forEach(function(r){
+    if(!r.quote)       r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+    if(!r.alcada)      r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+    if(!r.attachments) r.attachments=[];
+    if(!r.saving)      r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+  });
+}
+
 function loadFromGAS(){
   if(!GAS_URL) return Promise.resolve();
   gasSetStatus('sync','Conectando...');
   return new Promise(function(resolve){
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', GAS_URL+'?action=load&t='+Date.now(), true);
-    xhr.timeout = 20000;
-    xhr.onload = function(){
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET',GAS_URL+'?action=load&t='+Date.now(),true);
+    xhr.timeout=25000;
+    xhr.onload=function(){
       try{
-        var data = JSON.parse(xhr.responseText);
-        if(data && data.users && !data.error){
-          DB = data;
-          // Migração: garantir campos em requests legados
-          (DB.requests||[]).forEach(function(r){
-            if(!r.quote)    r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-            if(!r.alcada)   r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
-            if(!r.attachments) r.attachments=[];
-            if(!r.saving)   r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
-          });
-          // Migração de usuários
-          (DB.users||[]).forEach(function(u){
-            if(!u.notifications) u.notifications=[];
-          });
+        var text=xhr.responseText||'';
+        var data;
+        try{ data=JSON.parse(text); }
+        catch(e1){
+          var js=text.indexOf('{'),je=text.lastIndexOf('}');
+          if(js>=0&&je>js) data=JSON.parse(text.substring(js,je+1));
+          else throw new Error('Sem JSON na resposta');
+        }
+        if(data&&data.error==='DADOS_CORROMPIDOS'){
+          console.warn('Dados corrompidos no GAS — salvando cópia limpa...');
+          gasSetStatus('sync','Migrando...');
+          syncToGAS();
+          gasSetStatus('ok','🟢 Migrado');
+          toast('✅ Planilha migrada para novo formato!','success');
+        } else if(data&&data.users&&!data.error){
+          DB=data;
+          migrarRequisicoes(DB.requests);
+          (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
           sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
           gasSetStatus('ok','🟢 Conectado');
-          // Verificar versão do GAS em background
-          gasPost({action:'ping'}).then(function(res){
-            if(res && res.version){
-              console.log('GAS versão:', res.version, '— suporta:', res.supports);
-            } else {
-              console.warn('⚠ GAS conectado mas SEM resposta de versão — pode estar com código desatualizado!');
-              toast('⚠ Atenção: o GAS pode estar desatualizado. Reimplante a versão mais recente do código.','error');
-            }
-          });
         } else {
-          gasSetStatus('err','⚠ Erro: '+(data.error||'resposta inválida'));
+          gasSetStatus('err','⚠ '+(data&&data.error?data.error:'Resposta inválida'));
+          console.warn('GAS load error:',data);
         }
       } catch(e){
-        gasSetStatus('err','⚠ Dados locais');
+        gasSetStatus('err','⚠ Erro JSON');
+        console.error('loadFromGAS error:',e,xhr.responseText.slice(0,200));
       }
       resolve();
     };
-    xhr.onerror   = function(){ gasSetStatus('err','⚠ Sem conexão'); resolve(); };
-    xhr.ontimeout = function(){ gasSetStatus('err','⚠ Timeout'); resolve(); };
+    xhr.onerror=function(){ gasSetStatus('err','⚠ Sem conexão'); resolve(); };
+    xhr.ontimeout=function(){ gasSetStatus('err','⚠ Timeout'); resolve(); };
     xhr.send();
   });
 }
@@ -1362,15 +1371,29 @@ function salvarPerfilSenha(){
 
 function testGasVersion(){
   if(!GAS_URL){ toast('GAS_URL não está configurado no código.','error'); return; }
-  toast('Testando conexão com o GAS...','info');
+  toast('Testando conexão...','info');
   gasPost({action:'ping'}).then(function(res){
-    console.log('[TESTE GAS] resposta completa:', JSON.stringify(res));
     if(res && res.version){
-      toast('✅ GAS conectado — versão '+res.version+' (suporta: '+(res.supports||[]).join(', ')+')','success');
+      toast('✅ GAS v'+res.version+' conectado — suporta: '+(res.supports||[]).join(', '),'success');
     } else if(res && res.status==='ok'){
-      toast('⚠ GAS responde mas SEM informar versão — provavelmente desatualizado. Reimplante o código mais recente.','error');
+      toast('⚠ GAS conectado mas desatualizado. Reimplante o código.','error');
     } else {
-      toast('❌ GAS não respondeu corretamente: '+(res&&res.error?res.error:'sem resposta válida')+'. Verifique a URL e a implantação.','error');
+      toast('❌ GAS sem resposta: '+(res&&res.error?res.error:'verifique a URL'),'error');
+    }
+  });
+}
+
+function forceSyncGAS(){
+  if(!GAS_URL){ toast('GAS_URL não configurado.','error'); return; }
+  if(!confirm('Isso vai reescrever todos os dados da planilha com o DB atual. Confirma?')) return;
+  gasSetStatus('sync','Forçando sync...');
+  gasPost({action:'save',data:DB}).then(function(res){
+    if(res&&res.success){
+      gasSetStatus('ok','🟢 Salvo (forçado)');
+      toast('✅ Dados salvos no novo formato!','success');
+    } else {
+      gasSetStatus('err','⚠ Falha');
+      toast('❌ Falha ao salvar: '+(res&&res.error||'erro desconhecido'),'error');
     }
   });
 }
