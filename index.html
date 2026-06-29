@@ -220,6 +220,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 .toast.error{border-left:4px solid var(--red);}
 .toast.warning{border-left:4px solid var(--yellow);}
 ::-webkit-scrollbar{width:5px;height:5px;}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
 .perfil-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-md));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;flex-shrink:0;}
 .perfil-card{background:#fff;border:1px solid #e0e8e2;border-radius:var(--r);padding:22px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
 .perfil-field{margin-bottom:14px;}
@@ -440,14 +441,19 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
             <div class="form-group"><label>Nome do Requisitante *</label><input class="fc" id="reqName" type="text" placeholder="Nome completo"></div>
             <div class="form-group"><label>Data da Solicita&ccedil;&atilde;o *</label><input class="fc" id="reqDate" type="date"></div>
           </div>
-          <div class="form-group"><label>Prioridade *</label>
-            <select class="fc" id="reqType" onchange="checkUrgency()">
-              <option value="">Selecione...</option>
+          <div class="form-group">
+            <label style="color:#2c4a30;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;">
+              Tipo de Solicitação <span style="color:var(--red);">*</span>
+            </label>
+            <select class="fc" id="reqType" onchange="checkUrgency();markRequired(this)"
+              style="background:#f0f8f4;color:#1a3320;border:2px solid #c8d8cc;font-weight:700;font-size:14px;">
+              <option value="">— Selecione o tipo —</option>
               <option value="IMEDIATA">&#128308; IMEDIATA</option>
               <option value="URGENTE">&#128992; URGENTE</option>
               <option value="POUCO URGENTE">&#128993; POUCO URGENTE</option>
               <option value="NÃO URGENTE">&#128994; NÃO URGENTE</option>
             </select>
+            <div id="reqTypeErr" style="display:none;color:var(--red);font-size:11.5px;font-weight:700;margin-top:4px;">⚠ Selecione o tipo de solicitação</div>
           </div>
           <div class="fsec-title">&#128230; Itens da Solicita&ccedil;&atilde;o</div>
           <div style="overflow-x:auto;">
@@ -456,8 +462,15 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
             </tr></thead><tbody id="itemsBody"></tbody></table>
           </div>
           <button class="add-item-btn" onclick="addItem()">&#10133; Adicionar Item</button>
-          <div class="form-group" style="margin-top:16px;"><label>Justificativa</label>
-            <textarea class="fc" id="reqJust" rows="4" placeholder="Motivo, impacto, informações adicionais..."></textarea>
+          <div class="form-group" style="margin-top:16px;">
+            <label style="color:#2c4a30;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;">
+              Motivo / Justificativa <span style="color:var(--red);">*</span>
+            </label>
+            <textarea class="fc" id="reqJust" rows="4"
+              placeholder="Descreva o motivo, impacto e informações adicionais da solicitação..."
+              oninput="markRequired(this)"
+              style="background:#f0f8f4;color:#1a3320;border:2px solid #c8d8cc;font-size:14px;resize:vertical;"></textarea>
+            <div id="reqJustErr" style="display:none;color:var(--red);font-size:11.5px;font-weight:700;margin-top:4px;">⚠ Informe o motivo da solicitação</div>
           </div>
           <div class="form-group"><label>Imagens de Refer&ecirc;ncia</label>
             <div class="attach-area" onclick="document.getElementById('fInput').click()">
@@ -1132,6 +1145,27 @@ function handleFiles(input){
     reader.readAsDataURL(f);
   });
 }
+function markRequired(el){
+  // Remove erro visual quando campo é preenchido
+  if(el.value && el.value.trim()){
+    el.style.borderColor = 'var(--green)';
+    const errId = el.id + 'Err';
+    const errEl = document.getElementById(errId);
+    if(errEl) errEl.style.display = 'none';
+  }
+}
+
+function highlightRequired(fieldId){
+  const el = document.getElementById(fieldId);
+  if(!el) return;
+  el.style.borderColor = 'var(--red)';
+  el.style.animation = 'shake .3s ease';
+  setTimeout(function(){ el.style.animation = ''; }, 300);
+  const errEl = document.getElementById(fieldId+'Err');
+  if(errEl) errEl.style.display = 'block';
+  el.focus();
+}
+
 function checkUrgency(){ const v=document.getElementById('reqType').value; if(v==='IMEDIATA'||v==='URGENTE') document.getElementById('urgModal').classList.remove('hidden'); }
 function acceptUrg(){ document.getElementById('urgModal').classList.add('hidden'); toast('Urgência confirmada.','warning'); }
 function rejectUrg(){ document.getElementById('urgModal').classList.add('hidden'); document.getElementById('reqType').value=''; toast('Selecione outro tipo.','success'); }
@@ -1139,7 +1173,22 @@ function submitReq(){
   const name=document.getElementById('reqName').value.trim();
   const date=document.getElementById('reqDate').value;
   const type=document.getElementById('reqType').value;
-  if(!name||!date||!type){ toast('Preencha nome, data e tipo.','error'); return; }
+  // Validação com feedback visual
+  let hasError = false;
+  if(!type){
+    highlightRequired('reqType');
+    hasError = true;
+  }
+  const just = document.getElementById('reqJust').value.trim();
+  if(!just){
+    highlightRequired('reqJust');
+    hasError = true;
+  }
+  if(!name || !date){
+    toast('Preencha nome e data.','error');
+    hasError = true;
+  }
+  if(hasError){ toast('Preencha os campos obrigatórios destacados em vermelho.','error'); return; }
   const rows=document.querySelectorAll('#itemsBody tr'); const items=[];
   for(const tr of rows){ const n=tr.id.replace('ir-','');
     const desc=document.getElementById('id-'+n)?.value.trim();
@@ -1148,7 +1197,7 @@ function submitReq(){
     if(!desc){ toast('Preencha descrição de todos os itens.','error'); return; }
     items.push({desc,qty,cat}); }
   const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
-    justification:document.getElementById('reqJust').value.trim(),items,value:0,createdAt:new Date().toISOString(),chat:[],
+    justification:just,items,value:0,createdAt:new Date().toISOString(),chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
     alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''},
     saving:{value:0,pct:0,obs:'',registeredBy:'',registeredAt:''}};
