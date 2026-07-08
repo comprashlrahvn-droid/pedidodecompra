@@ -1028,7 +1028,7 @@ function showDetail(reqId){
     <div>${r.requester} &bull; ${r.date}</div></div>
     <div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Itens</div>
     ${r.items.map(it=>`<div style="padding:5px 0;border-bottom:1px solid #eaf0ea;">${it.desc} &times; ${it.qty} ${it.cat?'('+it.cat+')':''}</div>`).join('')}</div>
-    ${r.justification?`<div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Justificativa</div><div style="background:var(--g50);padding:10px 12px;border-radius:7px;font-size:13px;">${r.justification}</div></div>`:''}
+    ${r.justification?`<div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">💬 Justificativa do Requisitante</div><div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-left:4px solid var(--green-md);padding:11px 14px;border-radius:8px;font-size:13.5px;color:rgba(255,255,255,.92);line-height:1.6;">${r.justification}</div></div>`:''}
     ${(r.attachments&&r.attachments.length)?`
     <div style="margin-top:14px;">
       <div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">📎 Anexos da Solicitação</div>
@@ -1062,8 +1062,8 @@ function showDetail(reqId){
       return `<div class="cmsg ${mineSent?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${mineSent?'r':''}">${m.time} &bull; ${m.from==='user'?r.requester:'Setor Adm.'}</div></div>`;
     }).join('')}</div>
     <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
-    ${isMaster()?renderSavingBlock(r):''}
-    ${canSeeQuote()?renderQuoteTab(r):''}
+    ${(isMaster()&&r.alcada&&r.alcada.requested)?renderSavingBlock(r):''}
+    ${(canSeeQuote()&&r.alcada&&r.alcada.requested)?renderQuoteTab(r):''}
   `;
   document.getElementById('detailModal').classList.remove('hidden');
   setTimeout(()=>{ const cm=document.getElementById('chatMsgs'); if(cm) cm.scrollTop=cm.scrollHeight; },50);
