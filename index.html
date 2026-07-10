@@ -846,8 +846,14 @@ document.addEventListener('click',e=>{ document.querySelectorAll('[id^="sug-"]')
 function snapKey(id){ return 'hlr_snap_'+id; }
 function saveSnap(id){
   const snap={};
-  if(id==='admin'){ DB.requests.forEach(r=>{ snap[r.id]={status:r.status,chatCount:r.chat.length}; }); snap.__total=DB.requests.length; }
-  else{ DB.requests.filter(r=>r.userId===id).forEach(r=>{ snap[r.id]={status:r.status,chatCount:r.chat.length}; }); }
+  if(id==='admin'){
+    DB.requests.forEach(r=>{ snap[r.id]={status:r.status,chatCount:(r.chat||[]).length}; });
+    snap.__total=DB.requests.length;
+  } else {
+    const myId=String(id);
+    DB.requests.filter(r=>String(r.userId)===myId)
+      .forEach(r=>{ snap[r.id]={status:r.status,chatCount:(r.chat||[]).length}; });
+  }
   try{ localStorage.setItem(snapKey(id),JSON.stringify(snap)); }catch(e){}
 }
 function checkNotifs(id){
@@ -948,20 +954,36 @@ function initApp(){
   document.getElementById('tbarUser').textContent=CU.name;
   buildNav();
   navigate((isAdmin()||isDirecao())?'admin-dash':'dashboard');
-  const sid=(isAdmin()||isDirecao())?'admin':CU.id;
-  setTimeout(()=>{
-    updatePendingBadge();
-    updateNotifBadge();
-    // Mostrar automaticamente o painel de novidades se houver algo relevante
-    const diff = buildSnapDiff(sid);
-    const myAlcadas = DB.requests.filter(r=>
-      r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
-    );
-    const hasNews = diff.statusUpdates.length || diff.newMsgs.length || diff.newReqs.length || myAlcadas.length;
-    if(hasNews) showNotifs();
-  },800);
+  const sid=(isAdmin()||isDirecao())?'admin':String(CU.id);
   window.addEventListener('beforeunload',()=>saveSnap(sid),{once:true});
-  if(GAS_URL){ loadFromGAS().then(()=>{ if(CU){ buildNav(); navigate(isAdmin()?'admin-dash':'dashboard'); } }); }
+  // Carregar do GAS e SÓ DEPOIS verificar novidades (dados atualizados)
+  if(GAS_URL){
+    loadFromGAS().then(()=>{
+      updatePendingBadge();
+      updateNotifBadge();
+      // Verificar novidades com dados frescos do GAS
+      const diff = buildSnapDiff(sid);
+      const myAlcadas = DB.requests.filter(r=>
+        r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
+      );
+      const hasNews = diff.statusUpdates.length || diff.newMsgs.length || diff.newReqs.length || myAlcadas.length;
+      if(hasNews){
+        setTimeout(()=>showNotifs(), 300);
+      }
+    });
+  } else {
+    // Sem GAS — verificar com dados locais
+    setTimeout(()=>{
+      updatePendingBadge();
+      updateNotifBadge();
+      const diff = buildSnapDiff(sid);
+      const myAlcadas = DB.requests.filter(r=>
+        r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
+      );
+      const hasNews = diff.statusUpdates.length || diff.newMsgs.length || diff.newReqs.length || myAlcadas.length;
+      if(hasNews) showNotifs();
+    },500);
+  }
 }
 
 function buildNav(){
@@ -2304,7 +2326,7 @@ function toast(msg,type='success'){ const c=document.getElementById('toastWrap')
   setTimeout(()=>{ t.style.animation='tIn .25s ease reverse'; setTimeout(()=>t.remove(),250); },3500); }
 
 function buildSnapDiff(id){
-  // Retorna {statusUpdates, newMsgs, newReqs} comparando snapshot salvo com o estado atual
+  // id='admin' para admins/master/direcao, ou String(CU.id) para usuários comuns
   let raw; try{ raw=localStorage.getItem(snapKey(id)); }catch(e){}
   const result = { statusUpdates:[], newMsgs:[], newReqs:[] };
   if(!raw) return result;
@@ -2312,24 +2334,37 @@ function buildSnapDiff(id){
   const isAdminView = (id==='admin');
 
   if(isAdminView){
+    // Admin vê APENAS solicitações de usuários comuns (não de outros admins)
     const prevTotal = snap.__total||0;
-    DB.requests.slice(prevTotal).forEach(r=>result.newReqs.push(r));
-    DB.requests.slice(0,prevTotal).forEach(r=>{
+    const allReqs = DB.requests;
+    // Novas solicitações desde o último snapshot
+    allReqs.slice(prevTotal).forEach(r=>result.newReqs.push(r));
+    // Novas mensagens de usuários em solicitações existentes
+    allReqs.slice(0,prevTotal).forEach(r=>{
       const prev = snap[r.id]; if(!prev) return;
-      const userMsgCount = r.chat.length>prev.chatCount
-        ? r.chat.slice(prev.chatCount).filter(m=>m.from==='user').length : 0;
-      if(userMsgCount>0) result.newMsgs.push({req:r, count:userMsgCount, from:'usuário'});
+      if((r.chat||[]).length > prev.chatCount){
+        const newMsgs = (r.chat||[]).slice(prev.chatCount).filter(m=>m.from==='user');
+        if(newMsgs.length>0) result.newMsgs.push({req:r, count:newMsgs.length, from:'usuário'});
+      }
     });
   } else {
-    DB.requests.filter(r=>r.userId===id).forEach(r=>{
-      const prev = snap[r.id]; if(!prev) return;
-      if(prev.status !== r.status){
-        result.statusUpdates.push({req:r, prevStatus:prev.status, newStatus:r.status});
-      }
-      const adminMsgCount = r.chat.length>prev.chatCount
-        ? r.chat.slice(prev.chatCount).filter(m=>m.from==='admin'||m.from==='master'||m.from==='direcao').length : 0;
-      if(adminMsgCount>0) result.newMsgs.push({req:r, count:adminMsgCount, from:'setor de Compras'});
-    });
+    // Usuário comum: APENAS suas próprias solicitações
+    const myId = String(id);
+    DB.requests
+      .filter(r=>String(r.userId)===myId)
+      .forEach(r=>{
+        const prev = snap[r.id]; if(!prev) return;
+        // Mudança de status
+        if(prev.status !== r.status){
+          result.statusUpdates.push({req:r, prevStatus:prev.status, newStatus:r.status});
+        }
+        // Novas mensagens do admin/comprador
+        if((r.chat||[]).length > prev.chatCount){
+          const newMsgs = (r.chat||[]).slice(prev.chatCount)
+            .filter(m=>m.from==='admin'||m.from==='master'||m.from==='direcao');
+          if(newMsgs.length>0) result.newMsgs.push({req:r, count:newMsgs.length, from:'setor de Compras'});
+        }
+      });
   }
   return result;
 }
@@ -2338,7 +2373,7 @@ function showNotifs(){
   const mbody = document.getElementById('notifBody');
   if(!mbody){ document.getElementById('notifModal').classList.remove('hidden'); return; }
 
-  const sid = (isAdmin()||isDirecao()) ? 'admin' : (CU?CU.id:null);
+  const sid = (isAdmin()||isDirecao()) ? 'admin' : (CU?String(CU.id):null);
   const diff = sid!==null ? buildSnapDiff(sid) : {statusUpdates:[],newMsgs:[],newReqs:[]};
 
   const urgent  = DB.requests.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
