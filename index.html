@@ -640,7 +640,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
       <p id="notifSubtitle" style="font-size:13px;color:var(--g500);margin-bottom:14px;"></p>
       <div id="notifList"></div>
     </div>
-    <div class="mfoot"><button class="btn btn-green" onclick="closeModal('notifModal')">&#10003; Entendido</button></div>
+    <div class="mfoot"><button class="btn btn-green" onclick="var _s=(isAdmin()||isDirecao())?'admin':(CU?String(CU.id):null);if(_s)saveSnap(_s);closeModal('notifModal');">&#10003; Entendido</button></div>
   </div>
 </div>
 
@@ -695,7 +695,7 @@ function gasPost(payload){
   });
 }
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzNbVzRgNqfNz1_KjFE1kgHrJaHYqOIEg3DGIBYc7iHAEvtInVruEXUgBybV7PSCjnYlg/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzNbVzRgNqfNz1_KjFE1kgHrJaHYqOIEg3DGIBYc7iHAEvtInVruEXUgBybV7PSCjnYlg/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -847,12 +847,31 @@ function snapKey(id){ return 'hlr_snap_'+id; }
 function saveSnap(id){
   const snap={};
   if(id==='admin'){
-    DB.requests.forEach(r=>{ snap[r.id]={status:r.status,chatCount:(r.chat||[]).length}; });
-    snap.__total=DB.requests.length;
+    DB.requests.forEach(r=>{
+      snap[r.id]={status:r.status,chatCount:(r.chat||[]).length};
+    });
+    snap.__total = DB.requests.length;
+    // Marcar urgências abertas como VISTAS
+    snap.__seenUrgent = DB.requests
+      .filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8)
+      .map(r=>r.id);
+    // Marcar alçadas pendentes como VISTAS
+    snap.__seenAlcada = DB.requests
+      .filter(r=>r.alcada&&r.alcada.status==='pendente'&&String(r.alcada.approverId)===String(id))
+      .map(r=>r.id);
   } else {
     const myId=String(id);
-    DB.requests.filter(r=>String(r.userId)===myId)
-      .forEach(r=>{ snap[r.id]={status:r.status,chatCount:(r.chat||[]).length}; });
+    DB.requests.filter(r=>String(r.userId)===myId).forEach(r=>{
+      snap[r.id]={status:r.status,chatCount:(r.chat||[]).length};
+    });
+    // Urgências das MINHAS solicitações já vistas
+    snap.__seenUrgent = DB.requests
+      .filter(r=>String(r.userId)===myId&&(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8)
+      .map(r=>r.id);
+    // Alçadas pendentes que me foram enviadas já vistas
+    snap.__seenAlcada = DB.requests
+      .filter(r=>r.alcada&&r.alcada.status==='pendente'&&String(r.alcada.approverId)===myId)
+      .map(r=>r.id);
   }
   try{ localStorage.setItem(snapKey(id),JSON.stringify(snap)); }catch(e){}
 }
@@ -886,7 +905,7 @@ function checkNotifs(id){
     else{ const hs=u.statusChanged,hc=u.adminMsgs>0; ic=hs&&hc?'both':hs?'status':'chat'; ie=hs&&hc?'UPD':hs?'STS':'MSG';
       if(hs) lines.push('Status: <strong>'+DB.statusLabels[u.prevStatus]+'</strong> &rarr; <strong>'+DB.statusLabels[r.status]+'</strong>');
       if(hc) lines.push(u.adminMsgs+' nova(s) mensagem(ns) do setor Administrativo'); }
-    return `<div class="notif-item"><div class="notif-icon ${ic}" style="font-size:11px;font-weight:900;">${ie}</div><div style="flex:1"><div class="notif-req-id">${r.id}</div><div class="notif-desc">${r.items[0]?.desc+(r.items.length>1?' + '+(r.items.length-1)+' item(s)':'')}</div>${lines.map(l=>'<div class="notif-detail" style="margin-top:3px;">&bull; '+l+'</div>').join('')}</div><button class="btn btn-outline btn-sm" style="flex-shrink:0;" onclick="closeModal('notifModal');showDetail('${r.id}')">Ver &rarr;</button></div>`;
+    return `<div class="notif-item"><div class="notif-icon ${ic}" style="font-size:11px;font-weight:900;">${ie}</div><div style="flex:1"><div class="notif-req-id">${r.id}</div><div class="notif-desc">${r.items[0]?.desc+(r.items.length>1?' + '+(r.items.length-1)+' item(s)':'')}</div>${lines.map(l=>'<div class="notif-detail" style="margin-top:3px;">&bull; '+l+'</div>').join('')}</div><button class="btn btn-outline btn-sm" style="flex-shrink:0;" onclick="var _sv=(isAdmin()||isDirecao())?'admin':(CU?String(CU.id):null);if(_sv)saveSnap(_sv);closeModal('notifModal');showDetail('${r.id}')">Ver &rarr;</button></div>`;
   }).join('');
   document.getElementById('notifModal').classList.remove('hidden');
 }
@@ -963,10 +982,8 @@ function initApp(){
       updateNotifBadge();
       // Verificar novidades com dados frescos do GAS
       const diff = buildSnapDiff(sid);
-      const myAlcadas = DB.requests.filter(r=>
-        r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
-      );
-      const hasNews = diff.statusUpdates.length || diff.newMsgs.length || diff.newReqs.length || myAlcadas.length;
+      const hasNews = diff.statusUpdates.length || diff.newMsgs.length
+        || diff.newReqs.length || (diff.newUrgent||[]).length || (diff.newAlcada||[]).length;
       if(hasNews){
         setTimeout(()=>showNotifs(), 300);
       }
@@ -977,10 +994,8 @@ function initApp(){
       updatePendingBadge();
       updateNotifBadge();
       const diff = buildSnapDiff(sid);
-      const myAlcadas = DB.requests.filter(r=>
-        r.alcada && r.alcada.status==='pendente' && String(r.alcada.approverId)===String(CU.id)
-      );
-      const hasNews = diff.statusUpdates.length || diff.newMsgs.length || diff.newReqs.length || myAlcadas.length;
+      const hasNews = diff.statusUpdates.length || diff.newMsgs.length
+        || diff.newReqs.length || (diff.newUrgent||[]).length || (diff.newAlcada||[]).length;
       if(hasNews) showNotifs();
     },500);
   }
@@ -2326,45 +2341,69 @@ function toast(msg,type='success'){ const c=document.getElementById('toastWrap')
   setTimeout(()=>{ t.style.animation='tIn .25s ease reverse'; setTimeout(()=>t.remove(),250); },3500); }
 
 function buildSnapDiff(id){
-  // id='admin' para admins/master/direcao, ou String(CU.id) para usuários comuns
   let raw; try{ raw=localStorage.getItem(snapKey(id)); }catch(e){}
-  const result = { statusUpdates:[], newMsgs:[], newReqs:[] };
-  if(!raw) return result;
-  let snap; try{ snap=JSON.parse(raw); }catch(e){ return result; }
+  // Sem snap = primeira vez abrindo. Salvar estado atual como "visto" e não mostrar nada.
+  if(!raw){
+    saveSnap(id);
+    return { statusUpdates:[], newMsgs:[], newReqs:[], newUrgent:[], newAlcada:[] };
+  }
+  let snap; try{ snap=JSON.parse(raw); }catch(e){ return { statusUpdates:[], newMsgs:[], newReqs:[], newUrgent:[], newAlcada:[] }; }
+  const result = { statusUpdates:[], newMsgs:[], newReqs:[], newUrgent:[], newAlcada:[] };
+  const seenUrgent = snap.__seenUrgent || [];
+  const seenAlcada = snap.__seenAlcada || [];
   const isAdminView = (id==='admin');
 
   if(isAdminView){
-    // Admin vê APENAS solicitações de usuários comuns (não de outros admins)
-    const prevTotal = snap.__total||0;
+    const prevTotal = snap.__total || 0;
     const allReqs = DB.requests;
-    // Novas solicitações desde o último snapshot
+    // Novas solicitações (chegaram depois do último snap)
     allReqs.slice(prevTotal).forEach(r=>result.newReqs.push(r));
     // Novas mensagens de usuários em solicitações existentes
     allReqs.slice(0,prevTotal).forEach(r=>{
       const prev = snap[r.id]; if(!prev) return;
       if((r.chat||[]).length > prev.chatCount){
-        const newMsgs = (r.chat||[]).slice(prev.chatCount).filter(m=>m.from==='user');
-        if(newMsgs.length>0) result.newMsgs.push({req:r, count:newMsgs.length, from:'usuário'});
+        const nm = (r.chat||[]).slice(prev.chatCount).filter(m=>m.from==='user');
+        if(nm.length>0) result.newMsgs.push({req:r, count:nm.length, from:'usuário'});
       }
     });
+    // Urgências que NÃO estavam no snap anterior (novas desde última visualização)
+    allReqs
+      .filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8&&!seenUrgent.includes(r.id))
+      .forEach(r=>result.newUrgent.push(r));
+    // Alçadas pendentes novas (não vistas)
+    allReqs
+      .filter(r=>r.alcada&&r.alcada.status==='pendente'
+        &&String(r.alcada.approverId)===String(id)
+        &&!seenAlcada.includes(r.id))
+      .forEach(r=>result.newAlcada.push(r));
   } else {
-    // Usuário comum: APENAS suas próprias solicitações
     const myId = String(id);
+    // APENAS as próprias solicitações do usuário
+    DB.requests.filter(r=>String(r.userId)===myId).forEach(r=>{
+      const prev = snap[r.id]; if(!prev) return;
+      // Mudança de status
+      if(prev.status !== r.status)
+        result.statusUpdates.push({req:r, prevStatus:prev.status, newStatus:r.status});
+      // Novas mensagens do comprador
+      if((r.chat||[]).length > prev.chatCount){
+        const nm = (r.chat||[]).slice(prev.chatCount)
+          .filter(m=>m.from==='admin'||m.from==='master'||m.from==='direcao');
+        if(nm.length>0) result.newMsgs.push({req:r, count:nm.length, from:'setor de Compras'});
+      }
+    });
+    // Urgências das MINHAS solicitações que ainda não vi
     DB.requests
-      .filter(r=>String(r.userId)===myId)
-      .forEach(r=>{
-        const prev = snap[r.id]; if(!prev) return;
-        // Mudança de status
-        if(prev.status !== r.status){
-          result.statusUpdates.push({req:r, prevStatus:prev.status, newStatus:r.status});
-        }
-        // Novas mensagens do admin/comprador
-        if((r.chat||[]).length > prev.chatCount){
-          const newMsgs = (r.chat||[]).slice(prev.chatCount)
-            .filter(m=>m.from==='admin'||m.from==='master'||m.from==='direcao');
-          if(newMsgs.length>0) result.newMsgs.push({req:r, count:newMsgs.length, from:'setor de Compras'});
-        }
-      });
+      .filter(r=>String(r.userId)===myId
+        &&(r.type==='IMEDIATA'||r.type==='URGENTE')
+        &&r.status<8
+        &&!seenUrgent.includes(r.id))
+      .forEach(r=>result.newUrgent.push(r));
+    // Alçadas pendentes enviadas para MIM (não vistas)
+    DB.requests
+      .filter(r=>r.alcada&&r.alcada.status==='pendente'
+        &&String(r.alcada.approverId)===myId
+        &&!seenAlcada.includes(r.id))
+      .forEach(r=>result.newAlcada.push(r));
   }
   return result;
 }
@@ -2374,10 +2413,11 @@ function showNotifs(){
   if(!mbody){ document.getElementById('notifModal').classList.remove('hidden'); return; }
 
   const sid = (isAdmin()||isDirecao()) ? 'admin' : (CU?String(CU.id):null);
-  const diff = sid!==null ? buildSnapDiff(sid) : {statusUpdates:[],newMsgs:[],newReqs:[]};
+  const diff = sid!==null ? buildSnapDiff(sid) : {statusUpdates:[],newMsgs:[],newReqs:[],newUrgent:[],newAlcada:[]};
 
-  const urgent  = DB.requests.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
-  const alcadas = CU ? DB.requests.filter(r=>r.alcada&&r.alcada.status==='pendente'&&String(r.alcada.approverId)===String(CU.id)) : [];
+  // Usar APENAS o que o buildSnapDiff considera "novo" (não visto ainda)
+  const urgent  = diff.newUrgent  || [];
+  const alcadas = diff.newAlcada  || [];
 
   let html = '';
 
