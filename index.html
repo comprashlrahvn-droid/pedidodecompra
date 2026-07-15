@@ -220,6 +220,19 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 .toast.error{border-left:4px solid var(--red);}
 .toast.warning{border-left:4px solid var(--yellow);}
 ::-webkit-scrollbar{width:5px;height:5px;}
+/* ── ITENS POR STATUS ── */
+.item-row{display:grid;grid-template-columns:1fr 60px 80px 110px 110px 36px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07);}
+.item-row:last-child{border-bottom:none;}
+.item-row-hdr{font-size:10px;font-weight:900;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;}
+.item-status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:800;white-space:nowrap;}
+.ist-pend{background:rgba(212,172,13,.15);color:#d4ac0d;}
+.ist-part{background:rgba(30,140,58,.15);color:#27ae60;}
+.ist-done{background:rgba(30,140,58,.3);color:#1e8c3a;}
+.ist-cancel{background:rgba(192,57,43,.15);color:#c0392b;}
+.item-val-input{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:4px 7px;font-size:12px;color:rgba(255,255,255,.85);width:100%;font-family:'Nunito',sans-serif;}
+.item-val-input:focus{outline:none;border-color:var(--green-md);}
+.item-qty-recv{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:4px 7px;font-size:12px;color:rgba(255,255,255,.85);width:100%;font-family:'Nunito',sans-serif;}
+.item-qty-recv:focus{outline:none;border-color:var(--green-md);}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
 .perfil-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-md));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;flex-shrink:0;}
 .perfil-card{background:#fff;border:1px solid #e0e8e2;border-radius:var(--r);padding:22px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
@@ -770,6 +783,13 @@ function migrarRequisicoes(requests){
     if(!r.alcada)      r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
     if(!r.attachments) r.attachments=[];
     if(!r.saving)      r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+    // Migrar itens: adicionar campos de status/valor/entrega por item
+    (r.items||[]).forEach(function(it){
+      if(it.valorUnit===undefined)   it.valorUnit=0;
+      if(it.qtdRecebida===undefined) it.qtdRecebida=0;
+      if(it.itemStatus===undefined)  it.itemStatus=0; // 0=Pendente,1=Parcial,2=Recebido,3=Cancelado
+      if(it.itemObs===undefined)     it.itemObs='';
+    });
   });
 }
 
@@ -843,6 +863,15 @@ function onCatChange(catId,descId){ const cat=document.getElementById(catId)?.va
 document.addEventListener('click',e=>{ document.querySelectorAll('[id^="sug-"]').forEach(b=>{ if(!b.contains(e.target)) b.style.display='none'; }); });
 
 // ── SNAPSHOT / NOTIFICATIONS ──
+const ITEM_STATUS_LABELS = ['Pendente','Parcialmente Recebido','Recebido','Cancelado'];
+const ITEM_STATUS_CSS    = ['ist-pend','ist-part','ist-done','ist-cancel'];
+const ITEM_STATUS_ICONS  = ['⏳','📦','✅','✗'];
+
+function itemStatusBadge(st){
+  const s = st||0;
+  return '<span class="item-status-badge '+ITEM_STATUS_CSS[s]+'">'+ITEM_STATUS_ICONS[s]+' '+ITEM_STATUS_LABELS[s]+'</span>';
+}
+
 function snapKey(id){ return 'hlr_snap_'+id; }
 function saveSnap(id){
   const snap={};
@@ -1063,8 +1092,54 @@ function showDetail(reqId){
     ${stepper(r.status)}
     <div style="margin-top:16px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Requisitante</div>
     <div>${r.requester} &bull; ${r.date}</div></div>
-    <div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Itens</div>
-    ${r.items.map(it=>`<div style="padding:5px 0;border-bottom:1px solid #eaf0ea;">${it.desc} &times; ${it.qty} ${it.cat?'('+it.cat+')':''}</div>`).join('')}</div>
+    <div style="margin-top:14px;">
+      <div style="font-weight:800;font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">📦 Itens da Solicitação</div>
+      <!-- Cabeçalho -->
+      <div class="item-row item-row-hdr" style="padding-bottom:5px;margin-bottom:2px;">
+        <span>Descrição</span><span>Qtd</span>
+        ${canAdmin?'<span>Recebido</span><span>Valor Unit.</span>':'<span style=\'grid-column:span 2\'></span>'}
+        <span>Status</span><span></span>
+      </div>
+      <!-- Linhas de itens -->
+      ${r.items.map((it,i)=>`
+        <div class="item-row" id="itemrow_${r.id}_${i}">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:rgba(255,255,255,.9);">${it.desc}</div>
+            ${it.cat?`<div style="font-size:10.5px;color:rgba(255,255,255,.4);">${it.cat}</div>`:''}
+            ${it.itemObs?`<div style="font-size:11px;color:rgba(255,255,255,.5);font-style:italic;">${it.itemObs}</div>`:''}
+          </div>
+          <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.7);text-align:center;">${it.qty}</div>
+          ${canAdmin?`
+            <input class="item-qty-recv" type="number" min="0" max="${it.qty}" value="${it.qtdRecebida||0}"
+              placeholder="0" title="Qtd recebida (de ${it.qty})"
+              onchange="updateItemField('${r.id}',${i},'qtdRecebida',Math.min(${it.qty},Math.max(0,parseInt(this.value)||0)))">
+            <input class="item-val-input" type="number" min="0" step="0.01" value="${it.valorUnit||''}"
+              placeholder="R$ 0,00" title="Valor unitário"
+              onchange="updateItemField('${r.id}',${i},'valorUnit',parseFloat(this.value)||0)">
+          `:'<div></div><div></div>'}
+          <div>${itemStatusBadge(it.itemStatus)}</div>
+          ${canAdmin?`
+            <select style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:3px 5px;font-size:11px;color:rgba(255,255,255,.8);cursor:pointer;"
+              onchange="updateItemStatus('${r.id}',${i},parseInt(this.value))">
+              ${ITEM_STATUS_LABELS.map((l,si)=>`<option value="${si}" ${si===(it.itemStatus||0)?'selected':''}>${l}</option>`).join('')}
+            </select>
+          `:'<div></div>'}
+        </div>`).join('')}
+      <!-- Totais -->
+      ${canAdmin?`
+      <div style="margin-top:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:12px;color:rgba(255,255,255,.5);">
+          ${r.items.filter(it=>(it.itemStatus||0)===2).length}/${r.items.length} itens recebidos
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:12px;color:rgba(255,255,255,.5);">Valor total:</span>
+          <span style="font-size:15px;font-weight:900;color:var(--green-md);">
+            R$ ${r.items.reduce((a,it)=>a+(it.valorUnit||0)*(it.qty||1),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+          </span>
+          <button class="btn btn-green btn-sm" onclick="saveItemsUpdate('${r.id}')">💾 Salvar Itens</button>
+        </div>
+      </div>`:''}
+    </div>
     ${r.justification?`<div style="margin-top:12px;"><div style="font-weight:800;font-size:12px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">💬 Justificativa do Requisitante</div><div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-left:4px solid var(--green-md);padding:11px 14px;border-radius:8px;font-size:13.5px;color:rgba(255,255,255,.92);line-height:1.6;">${r.justification}</div></div>`:''}
     ${(r.attachments&&r.attachments.length)?`
     <div style="margin-top:14px;">
@@ -1232,7 +1307,7 @@ function submitReq(){
     const qty=parseInt(document.getElementById('iq-'+n)?.value)||1;
     const cat=document.getElementById('ic-'+n)?.value;
     if(!desc){ toast('Preencha descrição de todos os itens.','error'); return; }
-    items.push({desc,qty,cat}); }
+    items.push({desc,qty,cat,valorUnit:0,qtdRecebida:0,itemStatus:0,itemObs:''}); }
   const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
     justification:just,items,value:0,createdAt:new Date().toISOString(),chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
@@ -1368,6 +1443,40 @@ function deleteReq(reqId){
   if(document.getElementById('sec-admin-gestao').classList.contains('active')) renderAdminList();
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
 }
+function updateItemField(reqId, itemIdx, field, value){
+  const r = DB.requests.find(x=>x.id===reqId); if(!r||!r.items[itemIdx]) return;
+  r.items[itemIdx][field] = value;
+  // Recalcular valor total do request
+  r.value = r.items.reduce((a,it)=>a+(it.valorUnit||0)*(it.qty||1),0);
+}
+
+function updateItemStatus(reqId, itemIdx, newStatus){
+  const r = DB.requests.find(x=>x.id===reqId); if(!r||!r.items[itemIdx]) return;
+  r.items[itemIdx].itemStatus = newStatus;
+  // Recalcular status geral do pedido com base nos itens
+  const statuses = r.items.map(it=>it.itemStatus||0);
+  const allDone    = statuses.every(s=>s===2);
+  const allCancel  = statuses.every(s=>s===3);
+  const anyPartial = statuses.some(s=>s===1);
+  const anyDone    = statuses.some(s=>s===2);
+  const allPend    = statuses.every(s=>s===0);
+  if(allDone)         r.status = 8; // Finalizada
+  else if(allCancel)  r.status = 8;
+  else if(anyPartial||anyDone) r.status = 7; // Atendida Parcialmente
+  else if(allPend)    r.status = Math.min(r.status, 6);
+  // Atualizar select de status no modal se existir
+  const sel = document.getElementById('dtStatus');
+  if(sel) sel.value = r.status;
+}
+
+function saveItemsUpdate(reqId){
+  const r = DB.requests.find(x=>x.id===reqId); if(!r) return;
+  saveDB();
+  toast('✅ Itens atualizados com sucesso!','success');
+  // Reabrir para refletir novos status/valores
+  showDetail(reqId);
+}
+
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 
 function openPerfil(){
