@@ -787,9 +787,11 @@ function migrarRequisicoes(requests){
     (r.items||[]).forEach(function(it){
       if(it.valorUnit===undefined)   it.valorUnit=0;
       if(it.qtdRecebida===undefined) it.qtdRecebida=0;
-      if(it.itemStatus===undefined)  it.itemStatus=0; // 0=Pendente,1=Parcial,2=Recebido,3=Cancelado
+      if(it.itemStatus===undefined)  it.itemStatus=0;
       if(it.itemObs===undefined)     it.itemObs='';
     });
+    if(!r.updatedAt)      r.updatedAt = r.createdAt || r.date || new Date().toISOString();
+    if(!r.statusHistory)  r.statusHistory = [];
   });
 }
 
@@ -1431,7 +1433,13 @@ function adminUpdate(reqId){
   r.status=parseInt(document.getElementById('dtStatus').value);
   const v=parseFloat(document.getElementById('dtValue').value);
   if(!isNaN(v)) r.value=v;
-  if(oldStatus!==r.status) emailUser(r,oldStatus);
+  // Registrar data/hora da última atualização de status
+  r.updatedAt = new Date().toISOString();
+  if(!r.statusHistory) r.statusHistory = [];
+  if(oldStatus!==r.status){
+    r.statusHistory.push({from:oldStatus, to:r.status, at:r.updatedAt, by:CU.name});
+    emailUser(r,oldStatus);
+  }
   saveDB(); toast(reqId+': status atualizado.','success'); closeModal('detailModal');
   if(document.getElementById('sec-admin-gestao').classList.contains('active')) renderAdminList();
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
@@ -1471,9 +1479,9 @@ function updateItemStatus(reqId, itemIdx, newStatus){
 
 function saveItemsUpdate(reqId){
   const r = DB.requests.find(x=>x.id===reqId); if(!r) return;
+  r.updatedAt = new Date().toISOString();
   saveDB();
   toast('✅ Itens atualizados com sucesso!','success');
-  // Reabrir para refletir novos status/valores
   showDetail(reqId);
 }
 
@@ -2181,6 +2189,7 @@ function resolveAlcada(reqId, decision){
 // ── ADMIN DASH ──
 function renderAdminDash(){
   const all   = DB.requests;
+  const now   = new Date();
   const fin   = all.filter(r=>r.status===8).length;
   const pend  = all.filter(r=>r.status===0).length;
   const urg   = all.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8).length;
@@ -2188,13 +2197,53 @@ function renderAdminDash(){
   const totalSaving = all.reduce((acc,r)=>acc+(r.saving&&r.saving.value?r.saving.value:0),0);
   const savingCount = all.filter(r=>r.saving&&r.saving.registeredAt).length;
 
+  // ── KPI: Tempo médio entre atualizações ──────────────────
+  // Para cada solicitação aberta, considerar o tempo desde createdAt até updatedAt
+  // (ou até agora se nunca foi atualizada)
+  const updateTimes = all
+    .filter(r=>r.status>0) // só as que foram pelo menos uma vez atualizadas
+    .map(r=>{
+      const created = new Date(r.createdAt||r.date);
+      const updated = r.updatedAt ? new Date(r.updatedAt) : now;
+      return (updated - created) / 36e5; // horas
+    })
+    .filter(h=>h>=0&&h<8760); // ignorar valores absurdos (>1 ano)
+  const avgUpdateHours = updateTimes.length
+    ? updateTimes.reduce((a,b)=>a+b,0) / updateTimes.length : 0;
+  const avgUpdateDays = (avgUpdateHours/24).toFixed(1);
+
+  // ── KPI: Tempo médio de finalização ──────────────────────
+  const finTimes = all
+    .filter(r=>r.status===8&&r.updatedAt)
+    .map(r=>{
+      const created  = new Date(r.createdAt||r.date);
+      const finished = new Date(r.updatedAt);
+      return (finished - created) / 36e5; // horas
+    })
+    .filter(h=>h>=0&&h<8760);
+  const avgFinHours = finTimes.length
+    ? finTimes.reduce((a,b)=>a+b,0) / finTimes.length : 0;
+  const avgFinDays = (avgFinHours/24).toFixed(1);
+
   // ── Stat cards ─────────────────────────────────────────
   const sc = totalSaving>=0?'var(--green)':'var(--red)';
   let statsHtml = `
     <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-lbl">Total Solicitações</div><div class="stat-val">${all.length}</div></div>
     <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Novas (Abertas)</div><div class="stat-val">${pend}</div></div>
     <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>
-    <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>`;
+    <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>
+    <div class="stat-card" style="border-left-color:#1f6feb;">
+      <span class="stat-icon">🕐</span>
+      <div class="stat-lbl">Tempo Médio 1ª Atualização</div>
+      <div class="stat-val" style="font-size:18px;">${avgUpdateDays}d</div>
+      <div class="stat-sub" style="font-size:10.5px;color:#6b8570;margin-top:2px;">${updateTimes.length} sol. consideradas</div>
+    </div>
+    <div class="stat-card" style="border-left-color:#8b5cf6;">
+      <span class="stat-icon">🏁</span>
+      <div class="stat-lbl">Tempo Médio de Finalização</div>
+      <div class="stat-val" style="font-size:18px;">${avgFinDays}d</div>
+      <div class="stat-sub" style="font-size:10.5px;color:#6b8570;margin-top:2px;">${finTimes.length} finalizadas</div>
+    </div>`;
   if(isMaster()){
     statsHtml += `<div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-lbl">Usuários Pendentes</div><div class="stat-val">${uPend}</div></div>
     <div class="stat-card" style="border-left-color:${sc};">
@@ -2220,20 +2269,30 @@ function renderAdminDash(){
         <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
       </div>`).join('');
 
-  // ── Paradas +7 dias ────────────────────────────────────
-  const now   = new Date();
-  const stale = all.filter(r=>r.status>0&&r.status<8&&((now-new Date(r.createdAt||r.date))/864e5)>7);
-  const stEl  = document.getElementById('staleAlerts');
+  // ── Paradas +7 dias: SEM nenhuma atualização (updatedAt === createdAt ou null) ──
+  const stale = all.filter(r=>{
+    if(r.status===0||r.status===8) return false; // só em andamento
+    const created = new Date(r.createdAt||r.date);
+    // "Sem atualização" = updatedAt igual a createdAt (nunca foi tocada) ou não tem updatedAt
+    const lastUpdate = r.updatedAt ? new Date(r.updatedAt) : created;
+    const daysSinceUpdate = (now - lastUpdate) / 864e5;
+    return daysSinceUpdate > 7;
+  });
+  const stEl = document.getElementById('staleAlerts');
   if(stEl) stEl.innerHTML = !stale.length
     ? '<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhuma parada.</div>'
-    : stale.map(r=>`<div class="alert-card stale">
-        <span style="font-size:20px;">⌛</span>
-        <div style="flex:1">
-          <div style="font-weight:800;font-size:13px;">${r.id}</div>
-          <div style="font-size:11.5px;color:#7a9a80;">${r.requester} | ${Math.floor((now-new Date(r.createdAt||r.date))/864e5)}d</div>
-        </div>
-        <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
-      </div>`).join('');
+    : stale.map(r=>{
+        const lastUpdate = r.updatedAt ? new Date(r.updatedAt) : new Date(r.createdAt||r.date);
+        const daysSince  = Math.floor((now-lastUpdate)/864e5);
+        return `<div class="alert-card stale">
+          <span style="font-size:20px;">⌛</span>
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:13px;">${r.id}</div>
+            <div style="font-size:11.5px;color:#7a9a80;">${r.requester} | sem atualização há ${daysSince}d</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
+        </div>`;
+      }).join('');
 
   // ── Gráfico: solicitações por requisitante ─────────────
   const bu={};
@@ -2302,6 +2361,7 @@ function renderAdminDash(){
     }
   }
 }
+
 
 // ── ADMIN LIST ──
 function buildStatusFilter(){ document.getElementById('fStatus').innerHTML='<option value="">Todos os Status</option>'+DB.statusLabels.map((l,i)=>`<option value="${i}">${l}</option>`).join(''); }
