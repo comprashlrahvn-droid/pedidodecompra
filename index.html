@@ -734,17 +734,48 @@ const SEED = {
   nextId:3
 };
 
+function migrarRequisicoes(requests){
+  (requests||[]).forEach(function(r){
+    if(!r.quote)       r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
+    if(!r.alcada)      r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
+    if(!r.attachments) r.attachments=[];
+    if(!r.saving)      r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
+    // Migrar itens: adicionar campos de status/valor/entrega por item
+    (r.items||[]).forEach(function(it){
+      if(it.valorUnit===undefined)   it.valorUnit=0;
+      if(it.qtdRecebida===undefined) it.qtdRecebida=0;
+      if(it.itemStatus===undefined)  it.itemStatus=0;
+      if(it.itemObs===undefined)     it.itemObs='';
+    });
+    if(!r.updatedAt)      r.updatedAt = r.createdAt || r.date || new Date().toISOString();
+    if(!r.statusHistory)  r.statusHistory = [];
+  });
+}
+
 function loadDB(){
-  try{ const s=sessionStorage.getItem('hlr_sol_v1'); if(s){ const d=JSON.parse(s);
-    // Garantir campos cotação em requests legados
-    (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; if(!r.attachments) r.attachments=[]; });
-    return d; }
+  try{
+    const s1 = sessionStorage.getItem('hlr_sol_v1');
+    const s2 = localStorage.getItem('hlr_db_backup');
+    let best = null;
+    // Escolher o mais recente entre sessionStorage e localStorage backup
+    if(s1){ try{ const d=JSON.parse(s1); best=d; }catch(e){} }
+    if(s2){ try{
+      const d2=JSON.parse(s2);
+      if(!best||((d2._savedAt||'')>(best._savedAt||''))) best=d2;
+    }catch(e){} }
+    if(best){ migrarRequisicoes(best.requests); return best; }
   }catch(e){}
   const d=JSON.parse(JSON.stringify(SEED));
-  (d.requests||[]).forEach(r=>{ if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]}; if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}; if(!r.attachments) r.attachments=[]; });
+  migrarRequisicoes(d.requests);
   return d;
 }
-function saveDB(){ try{ sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB)); }catch(e){} syncToGAS(); }
+function saveDB(){
+  DB._savedAt = new Date().toISOString(); // timestamp de versão local
+  const json = JSON.stringify(DB);
+  try{ sessionStorage.setItem('hlr_sol_v1', json); }catch(e){}
+  try{ localStorage.setItem('hlr_db_backup', json); }catch(e){} // backup extra
+  syncToGAS();
+}
 
 let DB=loadDB();
 let CU=null;
@@ -763,37 +794,37 @@ function gasSetStatus(state,label){
   lbl.textContent=label||(state==='ok'?'🟢 Conectado':state==='err'?'⚠ Desconectado':'⏳ Conectando...');
 }
 function syncToGAS(){
-  if(!GAS_URL||gasSyncing) return;
-  gasSyncing=true; gasSetStatus('sync','Salvando...');
-  gasPost({action:'save',data:DB}).then(function(res){
+  if(!GAS_URL) return;
+  if(gasSyncing){
+    // Se já está sincronizando, agendar nova tentativa em 3s
+    setTimeout(syncToGAS, 3000);
+    return;
+  }
+  gasSyncing=true;
+  gasSetStatus('sync','Salvando...');
+  const dbSnapshot = JSON.stringify(DB); // snapshot no momento do save
+  gasPost({action:'save', data:DB}).then(function(res){
     if(res && res.success){
       gasSetStatus('ok','🟢 Salvo');
+      console.log('GAS save OK, chunks:', res.chunks||1);
     } else {
-      gasSetStatus('err','⚠ '+(res&&res.error?res.error.slice(0,40):'Falha ao salvar'));
+      gasSetStatus('err','⚠ '+(res&&res.error?res.error.slice(0,40):'Falha'));
+      console.warn('GAS save failed:', res);
+      // Guardar em localStorage para tentar depois
+      try{ localStorage.setItem('hlr_pending_sync', dbSnapshot); }catch(e){}
     }
     gasSyncing=false;
-  }).catch(function(){
-    gasSetStatus('err','⚠ Falha ao salvar');
+  }).catch(function(e){
+    gasSetStatus('err','⚠ Erro de rede');
     gasSyncing=false;
+    // Tentar reenviar em 10s
+    setTimeout(function(){
+      var pending = localStorage.getItem('hlr_pending_sync');
+      if(pending) syncToGAS();
+    }, 10000);
   });
 }
-function migrarRequisicoes(requests){
-  (requests||[]).forEach(function(r){
-    if(!r.quote)       r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-    if(!r.alcada)      r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
-    if(!r.attachments) r.attachments=[];
-    if(!r.saving)      r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
-    // Migrar itens: adicionar campos de status/valor/entrega por item
-    (r.items||[]).forEach(function(it){
-      if(it.valorUnit===undefined)   it.valorUnit=0;
-      if(it.qtdRecebida===undefined) it.qtdRecebida=0;
-      if(it.itemStatus===undefined)  it.itemStatus=0;
-      if(it.itemObs===undefined)     it.itemObs='';
-    });
-    if(!r.updatedAt)      r.updatedAt = r.createdAt || r.date || new Date().toISOString();
-    if(!r.statusHistory)  r.statusHistory = [];
-  });
-}
+
 
 function loadFromGAS(){
   if(!GAS_URL) return Promise.resolve();
@@ -819,11 +850,24 @@ function loadFromGAS(){
           gasSetStatus('ok','🟢 Migrado');
           toast('✅ Planilha migrada para novo formato!','success');
         } else if(data&&data.users&&!data.error){
-          DB=data;
-          migrarRequisicoes(DB.requests);
-          (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
-          sessionStorage.setItem('hlr_sol_v1',JSON.stringify(DB));
-          gasSetStatus('ok','🟢 Conectado');
+          // Só substituir DB local se o GAS tiver versão mais recente
+          const localSavedAt = DB._savedAt || '';
+          const gasSavedAt   = data._savedAt || '';
+          if(!localSavedAt || gasSavedAt >= localSavedAt){
+            DB = data;
+            migrarRequisicoes(DB.requests);
+            (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
+            var json = JSON.stringify(DB);
+            sessionStorage.setItem('hlr_sol_v1', json);
+            localStorage.setItem('hlr_db_backup', json);
+            gasSetStatus('ok','🟢 Conectado');
+            console.log('DB carregado do GAS (_savedAt:', gasSavedAt, ')');
+          } else {
+            gasSetStatus('ok','🟢 Conectado (local mais recente)');
+            console.log('DB local mais recente que GAS — mantendo local. Local:',localSavedAt,'GAS:',gasSavedAt);
+            // Salvar versão local no GAS para sincronizar
+            syncToGAS();
+          }
         } else {
           gasSetStatus('err','⚠ '+(data&&data.error?data.error:'Resposta inválida'));
           console.warn('GAS load error:',data);
@@ -1319,6 +1363,23 @@ function submitReq(){
   req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
   DB.requests.push(req); saveDB();
   items.forEach(it=>saveItemMem(it.desc,it.cat));
+  // Notificar Admin Master por e-mail
+  const masterUser = DB.users.find(function(u){ return u.role==='master'; });
+  if(GAS_URL && masterUser && masterUser.email){
+    gasPost({
+      action:     'sendStatusEmail',
+      to:         masterUser.email,
+      userName:   masterUser.name,
+      reqId:      req.id,
+      items:      (req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+      oldStatus:  '—',
+      newStatus:  '🆕 Nova Solicitação de '+req.requester+' ('+req.type+')',
+      date:       new Date().toLocaleDateString('pt-BR')
+    }).then(function(res){
+      if(res&&res.success) console.log('E-mail enviado ao Master:', masterUser.email);
+      else console.warn('Falha ao notificar Master:', res&&res.error);
+    });
+  }
   clearForm(); toast('Solicitação '+req.id+' enviada!','success'); navigate('minhas');
 }
 
