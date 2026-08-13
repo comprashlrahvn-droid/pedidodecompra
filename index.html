@@ -678,7 +678,7 @@ function gasPost(payload){
     xhr.open('POST', GAS_URL, true);
     // text/plain evita CORS preflight — GAS aceita e lê e.postData.contents
     xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-    xhr.timeout = 20000;
+    xhr.timeout = 12000;
     xhr.onload = function(){
       var text = xhr.responseText || '';
       console.log('[GAS RAW RESPONSE] status='+xhr.status+' body='+text.slice(0,300));
@@ -770,11 +770,14 @@ function loadDB(){
   return d;
 }
 function saveDB(){
-  DB._savedAt = new Date().toISOString(); // timestamp de versão local
+  DB._savedAt = new Date().toISOString();
   const json = JSON.stringify(DB);
+  // PRIMEIRO: salvar localmente (síncrono, instantâneo)
   try{ sessionStorage.setItem('hlr_sol_v1', json); }catch(e){}
-  try{ localStorage.setItem('hlr_db_backup', json); }catch(e){} // backup extra
-  syncToGAS();
+  try{ localStorage.setItem('hlr_db_backup', json); }catch(e){}
+  // DEPOIS: enviar ao GAS em background (assíncrono, pode falhar)
+  // Usar setTimeout para não bloquear a UI
+  setTimeout(function(){ syncToGAS(); }, 0);
 }
 
 let DB=loadDB();
@@ -808,10 +811,12 @@ function syncToGAS(){
       gasSetStatus('ok','🟢 Salvo');
       console.log('GAS save OK, chunks:', res.chunks||1);
     } else {
-      gasSetStatus('err','⚠ '+(res&&res.error?res.error.slice(0,40):'Falha'));
-      console.warn('GAS save failed:', res);
+      gasSetStatus('err','⚠ Timeout — dado salvo localmente');
+      console.warn('GAS save failed:', res&&res.error);
       // Guardar em localStorage para tentar depois
       try{ localStorage.setItem('hlr_pending_sync', dbSnapshot); }catch(e){}
+      // Tentar reenviar automaticamente em 30s
+      setTimeout(function(){ if(localStorage.getItem('hlr_pending_sync')) syncToGAS(); }, 30000);
     }
     gasSyncing=false;
   }).catch(function(e){
@@ -832,7 +837,7 @@ function loadFromGAS(){
   return new Promise(function(resolve){
     var xhr=new XMLHttpRequest();
     xhr.open('GET',GAS_URL+'?action=load&t='+Date.now(),true);
-    xhr.timeout=25000;
+    xhr.timeout=15000;
     xhr.onload=function(){
       try{
         var text=xhr.responseText||'';
@@ -853,15 +858,41 @@ function loadFromGAS(){
           // Só substituir DB local se o GAS tiver versão mais recente
           const localSavedAt = DB._savedAt || '';
           const gasSavedAt   = data._savedAt || '';
-          if(!localSavedAt || gasSavedAt >= localSavedAt){
+          // Só substituir se: local não tem data OU GAS é claramente mais recente
+          const gasIsNewer = gasSavedAt && localSavedAt && gasSavedAt > localSavedAt;
+          const localIsEmpty = !localSavedAt || (DB.requests||[]).length === 0;
+          if(localIsEmpty || gasIsNewer){
+            // Mesclar requests: para cada request, usar a versão mais recente (local ou GAS)
+            var localReqs = DB.requests || [];
+            var gasReqs   = data.requests || [];
+            var merged = [];
+            var localMap = {};
+            localReqs.forEach(function(r){ localMap[r.id] = r; });
+            gasReqs.forEach(function(r){
+              var local = localMap[r.id];
+              if(!local){
+                merged.push(r); // existe só no GAS
+              } else {
+                // Usar o mais recente (updatedAt ou _savedAt)
+                var localTime = local.updatedAt || local.createdAt || '';
+                var gasTime   = r.updatedAt    || r.createdAt    || '';
+                merged.push(localTime >= gasTime ? local : r);
+                delete localMap[r.id];
+              }
+            });
+            // Requests que existem só no local (criados durante timeout)
+            Object.keys(localMap).forEach(function(id){ merged.push(localMap[id]); });
+            data.requests = merged;
+            // Manter usuários do GAS (mais confiável para cadastros)
             DB = data;
+            DB.requests = merged;
             migrarRequisicoes(DB.requests);
             (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
             var json = JSON.stringify(DB);
             sessionStorage.setItem('hlr_sol_v1', json);
             localStorage.setItem('hlr_db_backup', json);
             gasSetStatus('ok','🟢 Conectado');
-            console.log('DB carregado do GAS (_savedAt:', gasSavedAt, ')');
+            console.log('DB mesclado: local='+localReqs.length+' GAS='+gasReqs.length+' merged='+merged.length);
           } else {
             gasSetStatus('ok','🟢 Conectado (local mais recente)');
             console.log('DB local mais recente que GAS — mantendo local. Local:',localSavedAt,'GAS:',gasSavedAt);
@@ -878,8 +909,8 @@ function loadFromGAS(){
       }
       resolve();
     };
-    xhr.onerror=function(){ gasSetStatus('err','⚠ Sem conexão'); resolve(); };
-    xhr.ontimeout=function(){ gasSetStatus('err','⚠ Timeout'); resolve(); };
+    xhr.onerror=function(){ gasSyncing=false; console.warn('gasPost network error'); resolve({success:false, error:'Erro de rede ao contatar o GAS'}); };
+    xhr.ontimeout=function(){ gasSyncing=false; console.warn('gasPost timeout'); resolve({success:false, error:'Timeout — dado salvo localmente'}); };
     xhr.send();
   });
 }
