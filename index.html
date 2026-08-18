@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<h
+}tml lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -671,44 +672,54 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 // Usamos Content-Type text/plain para evitar preflight e permitir CORS simples.
 // gasPost: envia dados ao GAS via XMLHttpRequest síncrono (evita problemas de CORS/redirect)
 // O GAS Web App aceita POST com text/plain e retorna JSON mesmo após redirect 302
-function gasPost(payload){
+function parseGasResponse(text){
+  try{ return JSON.parse(text); }catch(e){}
+  var s=text.indexOf('{'),e2=text.lastIndexOf('}');
+  if(s>=0&&e2>s){ try{ return JSON.parse(text.substring(s,e2+1)); }catch(e){} }
+  return null;
+}
+
+function gasPostXHR(body){
   return new Promise(function(resolve){
-    if(!GAS_URL){ resolve({success:false, error:'GAS_URL não configurado'}); return; }
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', GAS_URL, true);
-    // text/plain evita CORS preflight — GAS aceita e lê e.postData.contents
-    xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-    xhr.timeout = 12000;
-    xhr.onload = function(){
-      var text = xhr.responseText || '';
-      console.log('[GAS RAW RESPONSE] status='+xhr.status+' body='+text.slice(0,300));
-      try{
-        // Resposta direta em JSON (caso ideal)
-        var res = JSON.parse(text);
-        resolve(res);
-      } catch(e1){
-        // Tentar extrair JSON de dentro de HTML (página de erro/redirect do GAS)
-        var jsonStart = text.indexOf('{');
-        var jsonEnd   = text.lastIndexOf('}');
-        if(jsonStart>=0 && jsonEnd>jsonStart){
-          try{
-            var res2 = JSON.parse(text.substring(jsonStart, jsonEnd+1));
-            resolve(res2);
-            return;
-          }catch(e2){}
-        }
-        // Não foi possível extrair JSON — reportar falha real, sem mentir sucesso
-        console.warn('gasPost: resposta inválida do GAS:', text.slice(0,300));
-        resolve({success:false, error:'Resposta inesperada do GAS (HTTP '+xhr.status+'). Verifique se reimplantou a versão mais recente.', raw:text.slice(0,200)});
-      }
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST',GAS_URL,true);
+    xhr.setRequestHeader('Content-Type','text/plain;charset=utf-8');
+    xhr.timeout=12000;
+    xhr.onload=function(){
+      var res=parseGasResponse(xhr.responseText||'');
+      resolve(res||{success:false,error:'Resposta inválida (HTTP '+xhr.status+')'});
     };
-    xhr.onerror   = function(){ console.warn('gasPost network error'); resolve({success:false, error:'Erro de rede ao contatar o GAS'}); };
-    xhr.ontimeout = function(){ console.warn('gasPost timeout'); resolve({success:false, error:'Tempo esgotado ao contatar o GAS'}); };
-    xhr.send(JSON.stringify(payload));
+    xhr.onerror=function(){ gasSyncing=false; resolve({success:false,error:'Erro de rede'}); };
+    xhr.ontimeout=function(){ gasSyncing=false; resolve({success:false,error:'Timeout'}); };
+    xhr.send(body);
   });
 }
+
+function gasPost(payload){
+  if(!GAS_URL) return Promise.resolve({success:false,error:'GAS_URL não configurado'});
+  var body=JSON.stringify(payload);
+  if(typeof fetch!=='undefined'){
+    return fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:body,
+      redirect:'follow'
+    }).then(function(r){ return r.text(); })
+      .then(function(text){
+        console.log('[GAS POST ok]',text.slice(0,100));
+        var res=parseGasResponse(text);
+        return res||{success:false,error:'Resposta inválida'};
+      })
+      .catch(function(err){
+        gasSyncing=false;
+        console.warn('[GAS POST error]',err.message);
+        return gasPostXHR(body);
+      });
+  }
+  return gasPostXHR(body);
+}
 // ════════════════════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzNbVzRgNqfNz1_KjFE1kgHrJaHYqOIEg3DGIBYc7iHAEvtInVruEXUgBybV7PSCjnYlg/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwj-qXT1oLp29CkYkQsDldfwqXe2I3TgtCYWTJ8IYt-xmfHM0keGxXPuAn-lVZ2xAm8UQ/exec'; // Ex: 'https://script.google.com/macros/s/XXXX/exec'
 
 // ── SEED DATA ──
 const SEED = {
@@ -831,86 +842,95 @@ function syncToGAS(){
 }
 
 
+function processGasLoad(text){
+  try{
+    var data;
+    try{ data=JSON.parse(text); }
+    catch(e1){
+      var js=text.indexOf('{'), je=text.lastIndexOf('}');
+      if(js>=0&&je>js) data=JSON.parse(text.substring(js,je+1));
+      else throw new Error('Sem JSON');
+    }
+    if(data&&data.error==='DADOS_CORROMPIDOS'){
+      gasSetStatus('sync','Migrando...');
+      syncToGAS();
+      gasSetStatus('ok','🟢 Migrado');
+      toast('✅ Planilha migrada para novo formato!','success');
+    } else if(data&&data.users&&!data.error){
+      var localSavedAt = DB._savedAt||'';
+      var gasSavedAt   = data._savedAt||'';
+      var gasIsNewer   = gasSavedAt&&localSavedAt&&gasSavedAt>localSavedAt;
+      var localIsEmpty = !localSavedAt||(DB.requests||[]).length===0;
+      if(localIsEmpty||gasIsNewer){
+        var localReqs=DB.requests||[], gasReqs=data.requests||[];
+        var merged=[], localMap={};
+        localReqs.forEach(function(r){ localMap[r.id]=r; });
+        gasReqs.forEach(function(r){
+          var loc=localMap[r.id];
+          if(!loc){ merged.push(r); }
+          else{
+            var lt=loc.updatedAt||loc.createdAt||'';
+            var gt=r.updatedAt||r.createdAt||'';
+            merged.push(lt>=gt?loc:r);
+            delete localMap[r.id];
+          }
+        });
+        Object.keys(localMap).forEach(function(id){ merged.push(localMap[id]); });
+        data.requests=merged;
+        DB=data; DB.requests=merged;
+        migrarRequisicoes(DB.requests);
+        (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
+        var json=JSON.stringify(DB);
+        sessionStorage.setItem('hlr_sol_v1',json);
+        localStorage.setItem('hlr_db_backup',json);
+        gasSetStatus('ok','🟢 Conectado');
+        console.log('DB mesclado: local='+localReqs.length+' GAS='+gasReqs.length+' merged='+merged.length);
+      } else {
+        gasSetStatus('ok','🟢 Conectado (local mais recente)');
+        syncToGAS();
+      }
+    } else {
+      gasSetStatus('err','⚠ '+(data&&data.error?data.error:'Resposta inválida'));
+    }
+  } catch(e){
+    gasSetStatus('err','⚠ Erro ao processar resposta');
+    console.error('processGasLoad error:',e.message,text.slice(0,100));
+  }
+}
+
 function loadFromGAS(){
   if(!GAS_URL) return Promise.resolve();
   gasSetStatus('sync','Conectando...');
+  var url=GAS_URL+'?action=load&t='+Date.now();
+  if(typeof fetch!=='undefined'){
+    return fetch(url,{method:'GET',redirect:'follow'})
+      .then(function(r){ return r.text(); })
+      .then(function(text){
+        console.log('[GAS GET ok]',text.slice(0,80));
+        processGasLoad(text);
+      })
+      .catch(function(err){
+        gasSetStatus('err','⚠ Sem conexão');
+        console.warn('[GAS GET error]',err.message);
+        // Fallback: tentar XHR
+        return new Promise(function(resolve){
+          var xhr2=new XMLHttpRequest();
+          xhr2.open('GET',url,true);
+          xhr2.timeout=15000;
+          xhr2.onload=function(){ processGasLoad(xhr2.responseText||''); resolve(); };
+          xhr2.onerror=function(){ gasSetStatus('err','⚠ Sem conexão'); resolve(); };
+          xhr2.ontimeout=function(){ gasSetStatus('err','⚠ Timeout'); resolve(); };
+          xhr2.send();
+        });
+      });
+  }
   return new Promise(function(resolve){
     var xhr=new XMLHttpRequest();
-    xhr.open('GET',GAS_URL+'?action=load&t='+Date.now(),true);
+    xhr.open('GET',url,true);
     xhr.timeout=15000;
-    xhr.onload=function(){
-      try{
-        var text=xhr.responseText||'';
-        var data;
-        try{ data=JSON.parse(text); }
-        catch(e1){
-          var js=text.indexOf('{'),je=text.lastIndexOf('}');
-          if(js>=0&&je>js) data=JSON.parse(text.substring(js,je+1));
-          else throw new Error('Sem JSON na resposta');
-        }
-        if(data&&data.error==='DADOS_CORROMPIDOS'){
-          console.warn('Dados corrompidos no GAS — salvando cópia limpa...');
-          gasSetStatus('sync','Migrando...');
-          syncToGAS();
-          gasSetStatus('ok','🟢 Migrado');
-          toast('✅ Planilha migrada para novo formato!','success');
-        } else if(data&&data.users&&!data.error){
-          // Só substituir DB local se o GAS tiver versão mais recente
-          const localSavedAt = DB._savedAt || '';
-          const gasSavedAt   = data._savedAt || '';
-          // Só substituir se: local não tem data OU GAS é claramente mais recente
-          const gasIsNewer = gasSavedAt && localSavedAt && gasSavedAt > localSavedAt;
-          const localIsEmpty = !localSavedAt || (DB.requests||[]).length === 0;
-          if(localIsEmpty || gasIsNewer){
-            // Mesclar requests: para cada request, usar a versão mais recente (local ou GAS)
-            var localReqs = DB.requests || [];
-            var gasReqs   = data.requests || [];
-            var merged = [];
-            var localMap = {};
-            localReqs.forEach(function(r){ localMap[r.id] = r; });
-            gasReqs.forEach(function(r){
-              var local = localMap[r.id];
-              if(!local){
-                merged.push(r); // existe só no GAS
-              } else {
-                // Usar o mais recente (updatedAt ou _savedAt)
-                var localTime = local.updatedAt || local.createdAt || '';
-                var gasTime   = r.updatedAt    || r.createdAt    || '';
-                merged.push(localTime >= gasTime ? local : r);
-                delete localMap[r.id];
-              }
-            });
-            // Requests que existem só no local (criados durante timeout)
-            Object.keys(localMap).forEach(function(id){ merged.push(localMap[id]); });
-            data.requests = merged;
-            // Manter usuários do GAS (mais confiável para cadastros)
-            DB = data;
-            DB.requests = merged;
-            migrarRequisicoes(DB.requests);
-            (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
-            var json = JSON.stringify(DB);
-            sessionStorage.setItem('hlr_sol_v1', json);
-            localStorage.setItem('hlr_db_backup', json);
-            gasSetStatus('ok','🟢 Conectado');
-            console.log('DB mesclado: local='+localReqs.length+' GAS='+gasReqs.length+' merged='+merged.length);
-          } else {
-            gasSetStatus('ok','🟢 Conectado (local mais recente)');
-            console.log('DB local mais recente que GAS — mantendo local. Local:',localSavedAt,'GAS:',gasSavedAt);
-            // Salvar versão local no GAS para sincronizar
-            syncToGAS();
-          }
-        } else {
-          gasSetStatus('err','⚠ '+(data&&data.error?data.error:'Resposta inválida'));
-          console.warn('GAS load error:',data);
-        }
-      } catch(e){
-        gasSetStatus('err','⚠ Erro JSON');
-        console.error('loadFromGAS error:',e,xhr.responseText.slice(0,200));
-      }
-      resolve();
-    };
-    xhr.onerror=function(){ gasSyncing=false; console.warn('gasPost network error'); resolve({success:false, error:'Erro de rede ao contatar o GAS'}); };
-    xhr.ontimeout=function(){ gasSyncing=false; console.warn('gasPost timeout'); resolve({success:false, error:'Timeout — dado salvo localmente'}); };
+    xhr.onload=function(){ processGasLoad(xhr.responseText||''); resolve(); };
+    xhr.onerror=function(){ gasSetStatus('err','⚠ Sem conexão'); resolve(); };
+    xhr.ontimeout=function(){ gasSetStatus('err','⚠ Timeout'); resolve(); };
     xhr.send();
   });
 }
