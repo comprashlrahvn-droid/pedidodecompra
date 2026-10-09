@@ -294,6 +294,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 .role-direcao{background:#fde68a;color:#92400e;}
 .role-admin{background:#fde8e8;color:var(--red);}
 .role-user{background:var(--green-pale);color:var(--green);}
+.ist-ref{background:rgba(155,28,26,.14);color:#9b1c1a;}
+.ist-quot{background:rgba(31,111,235,.13);color:#1f6feb;}
+.ist-wait{background:rgba(139,92,246,.14);color:#6d3fd1;}
 </style>
 </head>
 <body>
@@ -534,6 +537,10 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
               <div class="chart-title">&#128200; Saving por Solicita&ccedil;&atilde;o</div>
               <div id="savingChart"></div>
             </div>
+            <div class="chart-area" style="margin-top:16px;">
+              <div class="chart-title">&#128100; Atendimentos por Respons&aacute;vel</div>
+              <div id="byAttendantChart"></div>
+            </div>
           </div>
           <div>
             <div class="chart-area">
@@ -550,7 +557,10 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
           <div style="font-weight:900;font-size:15px;font-family:'Montserrat',sans-serif;">Todas as Solicita&ccedil;&otilde;es</div>
           <div style="display:flex;gap:9px;flex-wrap:wrap;">
+            <input class="fc" id="fSearch" placeholder="Buscar..." style="width:150px;" oninput="renderAdminList()">
             <select class="fc" id="fStatus" style="width:205px;" onchange="renderAdminList()"><option value="">Todos os Status</option></select>
+            <select class="fc" id="fAtend" style="width:170px;" onchange="renderAdminList()"><option value="">Todos os atendentes</option></select>
+            <label class="cblabel" style="align-self:center;"><input type="checkbox" id="fStale" onchange="renderAdminList()"> Paradas +7d</label>
             <select class="fc" id="fPriority" style="width:160px;" onchange="renderAdminList()">
               <option value="">Toda Prioridade</option>
               <option value="IMEDIATA">&#128308; IMEDIATA</option>
@@ -561,6 +571,28 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
           </div>
         </div>
         <div id="adminReqList"></div>
+      </div>
+
+      <!-- ADMIN ITENS -->
+      <div class="section" id="sec-admin-itens">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+          <div style="font-weight:900;font-size:15px;font-family:'Montserrat',sans-serif;">Gerenciamento por Item</div>
+          <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">
+            <input class="fc" id="fiSearch" placeholder="Buscar item, solicita&ccedil;&atilde;o, requisitante..." style="width:240px;" oninput="renderAdminItems()">
+            <select class="fc" id="fiStatus" style="width:190px;" onchange="renderAdminItems()"><option value="">Todos os status do item</option></select>
+            <select class="fc" id="fiCat" style="width:170px;" onchange="renderAdminItems()"><option value="">Todas as categorias</option></select>
+            <select class="fc" id="fiAtend" style="width:170px;" onchange="renderAdminItems()"><option value="">Todos os atendentes</option></select>
+            <label class="cblabel"><input type="checkbox" id="fiHide" checked onchange="renderAdminItems()"> Ocultar encerradas</label>
+            <label class="cblabel"><input type="checkbox" id="fiStale" onchange="renderAdminItems()"> Paradas +7d</label>
+          </div>
+        </div>
+        <div id="itemSummary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div id="adminItemList"></div>
+      </div>
+
+      <!-- APROVAÇÕES DE ALÇADA -->
+      <div class="section" id="sec-aprovacoes">
+        <div id="aprovacoesList"></div>
       </div>
 
       <!-- ADMIN USUÁRIOS (Somente Master) -->
@@ -641,6 +673,22 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn btn-outline btn-sm" onclick="closeModal('approverModal')">Cancelar</button>
         <button class="btn btn-yellow btn-sm" onclick="confirmRequestAlcada()">📤 Enviar Solicitação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="closeReqModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="mhdr" id="closeReqHdr"><h3 id="closeReqTitle">Recusar</h3></div>
+    <div class="mbody" style="color:#2c3e30;background:#fff;">
+      <div id="closeReqInfo" style="font-size:13.5px;margin-bottom:12px;"></div>
+      <label style="font-size:12px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Motivo *</label>
+      <textarea id="closeReqReason" class="fc" rows="4" placeholder="Informe o motivo (obrigat&oacute;rio)..." style="margin-top:5px;background:#f5f8f5;color:#2c3e30;border:1.5px solid #dce8de;"></textarea>
+      <div id="closeReqErr" style="display:none;color:var(--red);font-size:11.5px;font-weight:700;margin-top:4px;">&#9888; Informe o motivo (m&iacute;nimo 3 caracteres)</div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline btn-sm" onclick="_closeCtx=null;closeModal('closeReqModal')">Voltar</button>
+        <button class="btn btn-danger btn-sm" id="closeReqBtn" onclick="confirmCloseReq()">Confirmar</button>
       </div>
     </div>
   </div>
@@ -741,9 +789,27 @@ const SEED = {
   ],
   statusLabels:['Solicitação Criada','Solicitação Acolhida','Em Análise',
     'Aguardando Aprovação','Aguardando Programação Financeira',
-    'Aguardando Entrega','Disponível para Retirada','Atendida Parcialmente','Finalizada'],
+    'Aguardando Entrega','Disponível para Retirada','Atendida Parcialmente','Finalizada','Recusada','Cancelada'],
   nextId:3
 };
+
+// ── STATUS EXTRAS (v2): 9 = Recusada, 10 = Cancelada ──────────────────────
+const ST_FINAL = 8, ST_RECUSADA = 9, ST_CANCELADA = 10;
+const STALE_DAYS = 7;                       // dias sem atividade para alertar "parada"
+const MAIN_MASTER_EMAIL = 'comprashlr.ahvn@gmail.com'; // conta Master principal (protegida)
+const DEFAULT_STATUS_LABELS = ['Solicitação Criada','Solicitação Acolhida','Em Análise',
+  'Aguardando Aprovação','Aguardando Programação Financeira',
+  'Aguardando Entrega','Disponível para Retirada','Atendida Parcialmente','Finalizada',
+  'Recusada','Cancelada'];
+
+// Garante que bancos antigos (com 9 status) ganhem "Recusada" e "Cancelada"
+function normalizeDB(d){
+  if(!d) return;
+  if(!Array.isArray(d.statusLabels)) d.statusLabels = DEFAULT_STATUS_LABELS.slice();
+  for(let i=0;i<DEFAULT_STATUS_LABELS.length;i++){
+    if(!d.statusLabels[i]) d.statusLabels[i] = DEFAULT_STATUS_LABELS[i];
+  }
+}
 
 function migrarRequisicoes(requests){
   (requests||[]).forEach(function(r){
@@ -757,9 +823,19 @@ function migrarRequisicoes(requests){
       if(it.qtdRecebida===undefined) it.qtdRecebida=0;
       if(it.itemStatus===undefined)  it.itemStatus=0;
       if(it.itemObs===undefined)     it.itemObs='';
+      if(it.itemReason===undefined)  it.itemReason='';
+      if(!Array.isArray(it.history)) it.history=[];
+      if(!it.updatedAt)              it.updatedAt=r.updatedAt||r.createdAt||r.date||'';
     });
     if(!r.updatedAt)      r.updatedAt = r.createdAt || r.date || new Date().toISOString();
     if(!r.statusHistory)  r.statusHistory = [];
+    if(!Array.isArray(r.activity)) r.activity = [];
+    if(r.closure===undefined) r.closure = null;
+    // Solicitações antigas: quem fez a 1ª mudança de status vira o "atendente"
+    if(r.attendedBy===undefined){
+      const h0 = (r.statusHistory||[])[0];
+      r.attendedBy = (h0&&h0.by) ? {id:null,name:h0.by,at:h0.at} : null;
+    }
   });
 }
 
@@ -774,10 +850,11 @@ function loadDB(){
       const d2=JSON.parse(s2);
       if(!best||((d2._savedAt||'')>(best._savedAt||''))) best=d2;
     }catch(e){} }
-    if(best){ migrarRequisicoes(best.requests); return best; }
+    if(best){ migrarRequisicoes(best.requests); normalizeDB(best); return best; }
   }catch(e){}
   const d=JSON.parse(JSON.stringify(SEED));
   migrarRequisicoes(d.requests);
+  normalizeDB(d);
   return d;
 }
 function saveDB(){
@@ -879,6 +956,7 @@ function processGasLoad(text){
         data.requests=merged;
         DB=data; DB.requests=merged;
         migrarRequisicoes(DB.requests);
+        normalizeDB(DB);
         (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
         var json=JSON.stringify(DB);
         sessionStorage.setItem('hlr_sol_v1',json);
@@ -960,12 +1038,14 @@ function onCatChange(catId,descId){ const cat=document.getElementById(catId)?.va
 document.addEventListener('click',e=>{ document.querySelectorAll('[id^="sug-"]').forEach(b=>{ if(!b.contains(e.target)) b.style.display='none'; }); });
 
 // ── SNAPSHOT / NOTIFICATIONS ──
-const ITEM_STATUS_LABELS = ['Pendente','Parcialmente Recebido','Recebido','Cancelado'];
-const ITEM_STATUS_CSS    = ['ist-pend','ist-part','ist-done','ist-cancel'];
-const ITEM_STATUS_ICONS  = ['⏳','📦','✅','✗'];
+// 0 Pendente · 1 Parcial · 2 Recebido · 3 Cancelado · 4 Recusado · 5 Em Cotação · 6 Aguardando Entrega
+const ITEM_STATUS_LABELS = ['Pendente','Parcialmente Recebido','Recebido','Cancelado','Recusado','Em Cotação','Aguardando Entrega'];
+const ITEM_STATUS_CSS    = ['ist-pend','ist-part','ist-done','ist-cancel','ist-ref','ist-quot','ist-wait'];
+const ITEM_STATUS_ICONS  = ['⏳','📦','✅','✗','🚫','🔎','🚚'];
+const ITEM_ORDER         = [0,5,6,1,2,3,4];   // ordem de exibição nos selects
 
 function itemStatusBadge(st){
-  const s = st||0;
+  const s = (st||0) in ITEM_STATUS_LABELS ? (st||0) : 0;
   return '<span class="item-status-badge '+ITEM_STATUS_CSS[s]+'">'+ITEM_STATUS_ICONS[s]+' '+ITEM_STATUS_LABELS[s]+'</span>';
 }
 
@@ -1099,6 +1179,7 @@ function initApp(){
   document.getElementById('tbarUser').textContent=CU.name;
   buildNav();
   navigate((isAdmin()||isDirecao())?'admin-dash':'dashboard');
+  openDeepLink();
   const sid=(isAdmin()||isDirecao())?'admin':String(CU.id);
   window.addEventListener('beforeunload',()=>saveSnap(sid),{once:true});
   // Carregar do GAS e SÓ DEPOIS verificar novidades (dados atualizados)
@@ -1129,44 +1210,47 @@ function initApp(){
 
 function buildNav(){
   const nav=document.getElementById('sbNav');
-  const pc=DB.users.filter(u=>u.status==='pending').length;
-  const pd=`<span class="nbadge" id="navPD" style="${pc>0?'':'display:none'}">${pc}</span>`;
+  const pc=DB.users.filter(function(u){ return u.status==='pending'; }).length;
+  const pd='<span class="nbadge" id="navPD" style="'+(pc>0?'':'display:none')+'">'+pc+'</span>';
+  const ap='<span class="nbadge" id="navAP" style="display:none">0</span>';
+  const aprov='<div class="nav-item" onclick="navigate(\'aprovacoes\')" data-s="aprovacoes"><span class="nav-icon">🔐</span> Aprovações '+ap+'</div>';
   if(isAdmin()||isDirecao()){
-    nav.innerHTML=`<div class="nav-sec">Administração</div>
-      <div class="nav-item" onclick="navigate('admin-dash')" data-s="admin-dash"><span class="nav-icon">🏠</span> Dashboard</div>
-      <div class="nav-item" onclick="navigate('admin-gestao')" data-s="admin-gestao"><span class="nav-icon">📋</span> Gerenciar Solicitações</div>
-      <div class="nav-item" onclick="navigate('admin-cat')" data-s="admin-cat"><span class="nav-icon">🗂</span> Categorias</div>
-      ${isMaster()?`<div class="nav-item" onclick="navigate('admin-users')" data-s="admin-users"><span class="nav-icon">👥</span> Usuários ${pd}</div>`:''}`;
+    nav.innerHTML='<div class="nav-sec">Administração</div>'
+      +'<div class="nav-item" onclick="navigate(\'admin-dash\')" data-s="admin-dash"><span class="nav-icon">🏠</span> Dashboard</div>'
+      +'<div class="nav-item" onclick="navigate(\'admin-gestao\')" data-s="admin-gestao"><span class="nav-icon">📋</span> Gerenciar Solicitações</div>'
+      +'<div class="nav-item" onclick="navigate(\'admin-itens\')" data-s="admin-itens"><span class="nav-icon">📦</span> Gerenciar Itens</div>'
+      +aprov
+      +'<div class="nav-item" onclick="navigate(\'admin-cat\')" data-s="admin-cat"><span class="nav-icon">🗂</span> Categorias</div>'
+      +(isMaster()?'<div class="nav-item" onclick="navigate(\'admin-users\')" data-s="admin-users"><span class="nav-icon">👥</span> Usuários '+pd+'</div>':'');
   } else {
-    nav.innerHTML=`<div class="nav-sec">Menu</div>
-      <div class="nav-item" onclick="navigate('dashboard')" data-s="dashboard"><span class="nav-icon">🏠</span> Dashboard</div>
-      <div class="nav-item" onclick="navigate('nova')" data-s="nova"><span class="nav-icon">✏️</span> Nova Solicitação</div>
-      <div class="nav-item" onclick="navigate('minhas')" data-s="minhas"><span class="nav-icon">📄</span> Minhas Solicitações</div>`;
+    nav.innerHTML='<div class="nav-sec">Menu</div>'
+      +'<div class="nav-item" onclick="navigate(\'dashboard\')" data-s="dashboard"><span class="nav-icon">🏠</span> Dashboard</div>'
+      +'<div class="nav-item" onclick="navigate(\'nova\')" data-s="nova"><span class="nav-icon">✏️</span> Nova Solicitação</div>'
+      +'<div class="nav-item" onclick="navigate(\'minhas\')" data-s="minhas"><span class="nav-icon">📄</span> Minhas Solicitações</div>'
+      +aprov;
   }
+  updateNotifBadge();
 }
 
 function navigate(sec){
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
   const el=document.getElementById('sec-'+sec); if(el) el.classList.add('active');
   const ni=document.querySelector('[data-s="'+sec+'"]'); if(ni) ni.classList.add('active');
   const titles={dashboard:'Dashboard',nova:'Nova Solicitação',minhas:'Minhas Solicitações',
-    'admin-dash':'Dashboard Administrativo','admin-gestao':'Gerenciar Solicitações',
-    'admin-users':'Gerenciar Usuários','admin-cat':'Categorias'};
+    'admin-dash':'Dashboard Administrativo','admin-gestao':'Gerenciar Solicitações','admin-itens':'Gerenciar Itens',
+    aprovacoes:'Aprovações de Alçada','admin-users':'Gerenciar Usuários','admin-cat':'Categorias'};
   document.getElementById('tbarTitle').textContent=titles[sec]||sec;
-  const uc=DB.requests.filter(r=>r.type==='IMEDIATA'||r.type==='URGENTE').length;
-  // Alçadas pendentes para o usuário logado
-  const alcPend=CU?DB.requests.filter(r=>r.alcada&&r.alcada.status==='pendente'&&r.alcada.approverId===CU.id).length:0;
-  const totalBadge=uc+alcPend;
-  const ndot=document.getElementById('ndot');
-  if(ndot){ ndot.style.display=totalBadge>0?'block':'none'; if(alcPend>0) ndot.style.background='#d4ac0d'; else ndot.style.background='var(--red)'; }
+  updateNotifBadge();
   const pd=document.getElementById('navPD');
-  if(pd){ const pc=DB.users.filter(u=>u.status==='pending').length; pd.textContent=pc; pd.style.display=pc>0?'inline':'none'; }
+  if(pd){ const pc=DB.users.filter(function(u){ return u.status==='pending'; }).length; pd.textContent=pc; pd.style.display=pc>0?'inline':'none'; }
   if(sec==='dashboard') renderUserDash();
   if(sec==='nova') prepForm();
   if(sec==='minhas'){ renderMySols(); renderMyItems(); }
   if(sec==='admin-dash') renderAdminDash();
   if(sec==='admin-gestao'){ buildStatusFilter(); renderAdminList(); }
+  if(sec==='admin-itens'){ buildItemFilters(); renderAdminItems(); }
+  if(sec==='aprovacoes') renderAprovacoes();
   if(sec==='admin-users') renderUsersPage();
   if(sec==='admin-cat') renderCats();
 }
@@ -1182,13 +1266,17 @@ function navigate(sec){
 // ── DETAIL MODAL ──
 function showDetail(reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  if(!canViewReq(r)){ toast('Sem permissão para ver esta solicitação.','error'); return; }
+  _detailOpenId=reqId;
   const canAdmin=isAdmin();
   document.getElementById('detailTitle').textContent='Detalhes — '+r.id;
   document.getElementById('detailBody').innerHTML=`
-    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;">${urgBadge(r.type)} ${statusBadge(r.status)}</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;">${urgBadge(r.type)} ${statusBadge(r.status)} ${alcadaChip(r)} ${attendBadge(r)}</div>
+    ${closureBanner(r)}
+    ${timingBar(r)}
     ${stepper(r.status)}
     <div style="margin-top:16px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Requisitante</div>
-    <div>${r.requester} &bull; ${r.date}</div></div>
+    <div>${esc(r.requester)} &bull; ${r.date} &bull; ${esc(reqSector(r))}</div></div>
     <div style="margin-top:14px;">
       <div style="font-weight:800;font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">📦 Itens da Solicitação</div>
       <!-- Cabeçalho -->
@@ -1207,18 +1295,18 @@ function showDetail(reqId){
           </div>
           <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.7);text-align:center;">${it.qty}</div>
           ${canAdmin?`
-            <input class="item-qty-recv" type="number" min="0" max="${it.qty}" value="${it.qtdRecebida||0}"
+            <input class="item-qty-recv" type="number" min="0" value="${it.qtdRecebida||0}"
               placeholder="0" title="Qtd recebida (de ${it.qty})"
-              onchange="updateItemField('${r.id}',${i},'qtdRecebida',Math.min(${it.qty},Math.max(0,parseInt(this.value)||0)))">
+              onchange="updateItemField('${r.id}',${i},'qtdRecebida',Math.max(0,parseInt(this.value)||0))">
             <input class="item-val-input" type="number" min="0" step="0.01" value="${it.valorUnit||''}"
               placeholder="R$ 0,00" title="Valor unitário"
               onchange="updateItemField('${r.id}',${i},'valorUnit',parseFloat(this.value)||0)">
           `:'<div></div><div></div>'}
-          <div>${itemStatusBadge(it.itemStatus)}</div>
+          <div>${itemStatusBadge(it.itemStatus)}${it.itemReason?`<div style="font-size:10.5px;color:rgba(255,255,255,.55);font-style:italic;">${esc(it.itemReason)}</div>`:''}</div>
           ${canAdmin?`
             <select style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:3px 5px;font-size:11px;color:rgba(255,255,255,.8);cursor:pointer;"
               onchange="updateItemStatus('${r.id}',${i},parseInt(this.value))">
-              ${ITEM_STATUS_LABELS.map((l,si)=>`<option value="${si}" ${si===(it.itemStatus||0)?'selected':''}>${l}</option>`).join('')}
+              ${ITEM_ORDER.map(si=>`<option value="${si}" ${si===(it.itemStatus||0)?'selected':''}>${ITEM_STATUS_LABELS[si]}</option>`).join('')}
             </select>
           `:'<div></div>'}
         </div>`).join('')}
@@ -1231,7 +1319,7 @@ function showDetail(reqId){
         <div style="display:flex;align-items:center;gap:12px;">
           <span style="font-size:12px;color:rgba(255,255,255,.5);">Valor total:</span>
           <span style="font-size:15px;font-weight:900;color:var(--green-md);">
-            R$ ${r.items.reduce((a,it)=>a+(it.valorUnit||0)*(it.qty||1),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}
+            R$ ${reqItemsTotal(r).toLocaleString('pt-BR',{minimumFractionDigits:2})}
           </span>
           <button class="btn btn-green btn-sm" onclick="saveItemsUpdate('${r.id}')">💾 Salvar Itens</button>
         </div>
@@ -1257,23 +1345,23 @@ function showDetail(reqId){
         }).join('')}
       </div>
     </div>`:''}
-    ${canAdmin?`<div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Atualizar Status</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <select class="fc" id="dtStatus" style="max-width:240px;">${DB.statusLabels.map((l,i)=>`<option value="${i}" ${i===r.status?'selected':''}>${l}</option>`).join('')}</select>
-      <input class="fc" id="dtValue" type="number" min="0" step="0.01" placeholder="Valor R$" value="${r.value||''}" style="max-width:130px;">
-      <button class="btn btn-green btn-sm" onclick="adminUpdate('${r.id}')">Salvar</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteReq('${r.id}')" style="margin-left:8px;">🗑 Excluir Solicitação</button>
-    </div></div>`:''}
+    ${detailActions(r)}
     <div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:7px;">💬 Mensagens</div>
     <div class="chat-box"><div class="chat-msgs" id="chatMsgs">${(r.chat||[]).map(m=>{
       const iAmAdminSide=isAdmin()||isMaster()||isDirecao();
       const mineSent=(iAmAdminSide&&m.from==='admin')||(!iAmAdminSide&&m.from==='user');
-      return `<div class="cmsg ${mineSent?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${mineSent?'r':''}">${m.time} &bull; ${m.from==='user'?r.requester:'Setor Adm.'}</div></div>`;
+      return `<div class="cmsg ${mineSent?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${mineSent?'r':''}">${m.time} &bull; ${esc(m.by||(m.from==='user'?r.requester:'Setor Adm.'))}</div></div>`;
     }).join('')}</div>
     <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
-    ${(isMaster()&&r.alcada&&r.alcada.requested)?renderSavingBlock(r):''}
-    ${(canSeeQuote()&&r.alcada&&r.alcada.requested)?renderQuoteTab(r):''}
+    ${(isMaster()&&r.status<9)?renderSavingBlock(r):''}
+    ${canSeeQuoteFor(r)?renderQuoteTab(r):''}
+    ${renderActivity(r)}
   `;
+  // Aprovador designado com decisão pendente já abre direto na aba de alçada
+  if(r.alcada&&r.alcada.status==='pendente'&&String(r.alcada.approverId)===String(CU.id)){
+    const _b=document.querySelector('#detailBody .quote-tab:nth-child(3)');
+    if(_b) switchQuoteTab(_b,'qt-alcada');
+  }
   document.getElementById('detailModal').classList.remove('hidden');
   setTimeout(()=>{ const cm=document.getElementById('chatMsgs'); if(cm) cm.scrollTop=cm.scrollHeight; },50);
 }
@@ -1406,29 +1494,24 @@ function submitReq(){
     if(!desc){ toast('Preencha descrição de todos os itens.','error'); return; }
     items.push({desc,qty,cat,valorUnit:0,qtdRecebida:0,itemStatus:0,itemObs:''}); }
   const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
-    justification:just,items,value:0,createdAt:new Date().toISOString(),chat:[],
+    justification:just,items,value:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sector:CU.sector||'',attendedBy:null,closure:null,activity:[],chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
     alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''},
     saving:{value:0,pct:0,obs:'',registeredBy:'',registeredAt:''}};
   // Salvar arquivos anexados diretamente no request
   req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
+  touchReq(req,'criada','Solicitação criada por '+name,{noAttend:true});
   DB.requests.push(req); saveDB();
   items.forEach(it=>saveItemMem(it.desc,it.cat));
-  // Notificar Admin Master por e-mail
-  const masterUser = DB.users.find(function(u){ return u.role==='master'; });
-  if(GAS_URL && masterUser && masterUser.email){
-    gasPost({
-      action:     'sendStatusEmail',
-      to:         masterUser.email,
-      userName:   masterUser.name,
-      reqId:      req.id,
-      items:      (req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
-      oldStatus:  '—',
-      newStatus:  '🆕 Nova Solicitação de '+req.requester+' ('+req.type+')',
-      date:       new Date().toLocaleDateString('pt-BR')
-    }).then(function(res){
-      if(res&&res.success) console.log('E-mail enviado ao Master:', masterUser.email);
-      else console.warn('Falha ao notificar Master:', res&&res.error);
+  // Notificar TODOS os Masters ativos (inclui a assistente) por e-mail
+  if(GAS_URL){
+    const itensTxt=(req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', ');
+    DB.users.filter(function(u){ return u.role==='master'&&u.status==='active'&&u.email&&u.id!==CU.id; }).forEach(function(m){
+      gasPost({action:'sendStatusEmail',to:m.email,userName:m.name,reqId:req.id,items:itensTxt,
+        oldStatus:'—',newStatus:'🆕 Nova Solicitação de '+req.requester+' ('+req.type+')',
+        date:new Date().toLocaleDateString('pt-BR')}).then(function(res){
+        if(!(res&&res.success)) console.warn('Falha ao notificar Master '+m.email+':', res&&res.error);
+      });
     });
   }
   clearForm(); toast('Solicitação '+req.id+' enviada!','success'); navigate('minhas');
@@ -1436,22 +1519,38 @@ function submitReq(){
 
 // ── BADGES ──
 function urgBadge(t){ return {'IMEDIATA':'<span class="badge badge-red">IMEDIATA</span>','URGENTE':'<span class="badge badge-red">URGENTE</span>','POUCO URGENTE':'<span class="badge badge-yellow">POUCO URGENTE</span>','NAO URGENTE':'<span class="badge badge-green">NÃO URGENTE</span>','NÃO URGENTE':'<span class="badge badge-green">NÃO URGENTE</span>'}[t]||('<span class="badge badge-gray">'+t+'</span>'); }
-function statusBadge(s){ const c=['gray','navy','yellow','yellow','yellow','blue','green','red','green']; return '<span class="badge badge-'+(c[s]||'gray')+'">'+DB.statusLabels[s]+'</span>'; }
-function stepper(cur){ const n=DB.statusLabels.length; let h='<div class="stepper">';
-  for(let i=0;i<n;i++){ const st=i<cur?'done':i===cur?'cur':''; h+=`<div class="step ${st}"><div class="step-dot">${i<cur?'✓':i+1}</div><div class="step-lbl">${DB.statusLabels[i]}</div></div>`; if(i<n-1)h+=`<div class="step-line ${i<cur?'done':''}"></div>`; }
-  return h+'</div>'; }
+function statusBadge(s){
+  const c=['gray','navy','yellow','yellow','yellow','blue','green','red','green','red','gray'];
+  return '<span class="badge badge-'+(c[s]||'gray')+'">'+stLabel(s)+'</span>';
+}
+function stepper(cur){
+  if(cur>=9){
+    const rec=(cur===9);
+    return '<div style="margin:12px 0;padding:9px 14px;border-radius:8px;font-weight:800;font-size:12.5px;'
+      +(rec?'background:#fde8e8;color:#9b1c1a;border:1px solid #e08080;':'background:#e8ecef;color:#445566;border:1px solid #b8c4cc;')+'">'
+      +(rec?'🚫 Solicitação recusada':'✖ Solicitação cancelada')+'</div>';
+  }
+  const n=9; let h='<div class="stepper">';
+  for(let i=0;i<n;i++){
+    const st=i<cur?'done':i===cur?'cur':'';
+    h+='<div class="step '+st+'"><div class="step-dot">'+(i<cur?'✓':i+1)+'</div><div class="step-lbl">'+stLabel(i)+'</div></div>';
+    if(i<n-1) h+='<div class="step-line '+(i<cur?'done':'')+'"></div>';
+  }
+  return h+'</div>';
+}
 
 // ── USER DASHBOARD ──
 function renderUserDash(){
   const my=DB.requests.filter(r=>r.userId===CU.id);
   const fin=my.filter(r=>r.status===8).length; const and=my.filter(r=>r.status>0&&r.status<8).length;
   const urg=my.filter(r=>r.type==='IMEDIATA'||r.type==='URGENTE').length;
-  const val=my.reduce((a,r)=>a+(r.value||0),0);
+  const val=my.filter(r=>r.status<9).reduce((a,r)=>a+(r.value||0),0);
   document.getElementById('userStats').innerHTML=`
     <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-lbl">Total</div><div class="stat-val">${my.length}</div></div>
     <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>
     <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Em Andamento</div><div class="stat-val">${and}</div></div>
-    <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>`;
+    <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>
+    <div class="stat-card red"><span class="stat-icon">🚫</span><div class="stat-lbl">Recusadas / Canceladas</div><div class="stat-val" style="font-size:20px;">${my.filter(r=>r.status===9).length} / ${my.filter(r=>r.status===10).length}</div></div>`;
   document.getElementById('uFinancial').textContent='R$ '+val.toLocaleString('pt-BR',{minimumFractionDigits:2});
   const now=new Date(); const mc=Array(6).fill(0);
   my.forEach(r=>{ const d=new Date(r.createdAt||r.date); if(d.getFullYear()===now.getFullYear()){ const off=now.getMonth()-d.getMonth(); if(off>=0&&off<6)mc[5-off]++; }});
@@ -1478,28 +1577,41 @@ function switchTab(id,btn){
   if(btn) btn.classList.add('active');
 }
 function renderMySols(){
-  // Usuário vê apenas as suas; admin vê todas
-  const reqs=isAdmin()?DB.requests:DB.requests.filter(r=>r.userId===CU.id);
+  const reqs=isAdmin()?DB.requests:DB.requests.filter(function(r){ return r.userId===CU.id; });
   const el=document.getElementById('minhasSols');
   if(!reqs.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhuma solicitação encontrada.</div>'; return; }
-  el.innerHTML=[...reqs].reverse().map(r=>`<div class="req-card ${r.type==='IMEDIATA'||r.type==='URGENTE'?'urgent':r.type==='POUCO URGENTE'?'high':'normal'}">
-    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px;">
-      <strong style="font-family:'Montserrat',sans-serif;font-size:13px;">${r.id}</strong> ${urgBadge(r.type)} ${statusBadge(r.status)}
-    </div>
-    <div style="font-size:13.5px;font-weight:700;margin-bottom:4px;">${r.items.map(i=>i.desc).join(', ')}</div>
-    <div style="font-size:12px;color:var(--g500);margin-bottom:10px;">${r.requester} &bull; ${r.date} &bull; ${r.items.length} item(s)</div>
-    ${stepper(r.status)}
-    ${r.chat.length?`<div style="font-size:12px;color:var(--g700);margin-top:8px;padding:8px 11px;background:var(--g50);border-radius:6px;border-left:3px solid var(--navy);">💬 Última msg: ${r.chat[r.chat.length-1].msg}</div>`:''}
-    <div style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver Detalhes</button></div>
-  </div>`).join('');
+  el.innerHTML=[...reqs].reverse().map(function(r){
+    const own=(r.userId===CU.id);
+    const stale=isStale(r);
+    return '<div class="req-card '+(r.type==='IMEDIATA'||r.type==='URGENTE'?'urgent':r.type==='POUCO URGENTE'?'high':'normal')+'">'
+    +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px;">'
+      +'<strong style="font-family:\'Montserrat\',sans-serif;font-size:13px;">'+r.id+'</strong> '+urgBadge(r.type)+' '+statusBadge(r.status)+' '+attendBadge(r)+'</div>'
+    +'<div style="font-size:13.5px;font-weight:700;margin-bottom:4px;">'+r.items.map(function(i){ return esc(i.desc); }).join(', ')+'</div>'
+    +'<div style="font-size:12px;color:var(--g500);margin-bottom:6px;">'+esc(r.requester)+' &bull; '+r.date+' &bull; '+r.items.length+' item(s)</div>'
+    +'<div style="font-size:11.5px;color:#6b8570;margin-bottom:8px;">⏱ '+(r.status>=8?'Atendimento: ':'Aberta há ')+ageLabel(r)
+      +' &bull; 🕒 Última atualização '+(r.status>=8?fmtDT(r.finishedAt||r.updatedAt):'há '+sinceUpdateLabel(r))+(stale?' <strong style="color:#b7791f;">⚠ parada</strong>':'')+'</div>'
+    +stepper(r.status)
+    +((r.status>=9&&r.closure&&r.closure.reason)?'<div style="font-size:12.5px;margin-top:8px;padding:8px 11px;background:#fff5f5;border-radius:6px;border-left:3px solid #c0392b;"><strong>Motivo:</strong> '+esc(r.closure.reason)+'</div>':'')
+    +(r.chat.length?'<div style="font-size:12px;color:var(--g700);margin-top:8px;padding:8px 11px;background:var(--g50);border-radius:6px;border-left:3px solid var(--navy);">💬 Última msg: '+r.chat[r.chat.length-1].msg+'</div>':'')
+    +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="showDetail(\''+r.id+'\')">Ver Detalhes</button>'
+      +((isAdmin()&&r.status<8)?'<button class="btn btn-outline btn-sm" style="color:#c0392b;border-color:#e0a0a0;" onclick="openCloseModal(\''+r.id+'\',\'recusada\')">🚫 Recusar</button>':'')
+      +(((own||isAdmin())&&r.status<8)?'<button class="btn btn-outline btn-sm" style="color:#c0392b;border-color:#e0a0a0;" onclick="openCloseModal(\''+r.id+'\',\'cancelada\')">✖ Cancelar</button>':'')
+    +'</div></div>';
+  }).join('');
 }
 function renderMyItems(){
-  const reqs=isAdmin()?DB.requests:DB.requests.filter(r=>r.userId===CU.id);
+  const reqs=isAdmin()?DB.requests:DB.requests.filter(function(r){ return r.userId===CU.id; });
   const el=document.getElementById('itensList');
-  const all=reqs.flatMap(r=>r.items.map(it=>({...it,reqId:r.id,status:r.status,type:r.type,requester:r.requester})));
+  const all=[];
+  reqs.forEach(function(r){ r.items.forEach(function(it){ all.push({it:it,r:r}); }); });
   if(!all.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhum item.</div>'; return; }
-  el.innerHTML=`<div class="card"><table class="itable"><thead><tr><th>Req.</th><th>Descrição</th><th>Qtd</th><th>Cat.</th><th>Status</th></tr></thead><tbody>`+
-    all.map(it=>`<tr><td><strong>${it.reqId}</strong></td><td>${it.desc}</td><td>${it.qty}</td><td>${it.cat||'-'}</td><td>${statusBadge(it.status)}</td></tr>`).join('')+'</tbody></table></div>';
+  el.innerHTML='<div class="card" style="overflow-x:auto;"><table class="itable"><thead><tr><th>Req.</th><th>Descrição</th><th>Qtd</th><th>Recebida</th><th>Status do Item</th><th>Solicitação</th><th>Obs.</th></tr></thead><tbody>'
+    +all.slice().reverse().map(function(x){
+      const it=x.it, r=x.r;
+      return '<tr><td><strong>'+r.id+'</strong></td><td>'+esc(it.desc)+'<div style="font-size:11px;color:#7a9a80;">'+esc(it.cat||'-')+'</div></td>'
+        +'<td>'+it.qty+'</td><td>'+(it.qtdRecebida||0)+'</td><td>'+itemStatusBadge(it.itemStatus)+'</td><td>'+statusBadge(r.status)+'</td>'
+        +'<td style="font-size:12px;color:#9b1c1a;font-style:italic;">'+esc(it.itemReason||'')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
 }
 
 // ── DETAIL MODAL ──
@@ -1516,22 +1628,26 @@ function previewAttachment(fileId, reqId){
 
 function sendChat(reqId){
   const inp=document.getElementById('chatIn'); if(!inp||!inp.value.trim()) return;
-  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r||!canViewReq(r)) return;
   if(!Array.isArray(r.chat)) r.chat=[];
   const now=new Date(); const t=now.toLocaleDateString('pt-BR')+' '+now.toTimeString().slice(0,5);
   const fromVal=(isAdmin()||isMaster()||isDirecao())?'admin':'user';
-  r.chat.push({from:fromVal,msg:inp.value.trim(),time:t});
+  const msg=inp.value.trim();
+  r.chat.push({from:fromVal,msg:msg,time:t,by:CU.name});
+  touchReq(r,'chat',(fromVal==='admin'?'Mensagem do setor de Compras: ':'Mensagem do requisitante: ')+(msg.length>70?msg.slice(0,70)+'…':msg));
   inp.value=''; saveDB(); showDetail(reqId); toast('Mensagem enviada.','success');
 }
-function emailUser(req,oldStatus){
+function emailUser(req,oldStatus,extra){
   if(!GAS_URL) return;
-  const user=DB.users.find(u=>u.id===req.userId);
+  extra=extra||{};
+  const user=DB.users.find(function(u){ return u.id===req.userId; });
   if(!user||!user.email) return;
-  const oldLbl=DB.statusLabels[oldStatus]||('Status '+oldStatus);
-  const newLbl=DB.statusLabels[req.status]||('Status '+req.status);
   gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
-    items:(req.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-    oldStatus:oldLbl,newStatus:newLbl,date:new Date().toLocaleDateString('pt-BR')}
+    items:(req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+    oldStatus:stLabel(oldStatus),newStatus:stLabel(req.status),
+    reason:extra.reason||((req.status>=9&&req.closure)?req.closure.reason:''),
+    attendedBy:req.attendedBy?req.attendedBy.name:'',
+    date:new Date().toLocaleDateString('pt-BR')}
   ).then(function(res){
     if(!res || !res.success){
       console.warn('Falha ao enviar e-mail de status:', res&&res.error);
@@ -1540,21 +1656,27 @@ function emailUser(req,oldStatus){
   });
 }
 function adminUpdate(reqId){
-  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
-  const oldStatus=r.status;
-  r.status=parseInt(document.getElementById('dtStatus').value);
+  if(!isAdmin()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  const ns=parseInt(document.getElementById('dtStatus').value);
   const v=parseFloat(document.getElementById('dtValue').value);
-  if(!isNaN(v)) r.value=v;
-  // Registrar data/hora da última atualização de status
-  r.updatedAt = new Date().toISOString();
-  if(!r.statusHistory) r.statusHistory = [];
-  if(oldStatus!==r.status){
-    r.statusHistory.push({from:oldStatus, to:r.status, at:r.updatedAt, by:CU.name});
-    emailUser(r,oldStatus);
+  if(ns!==r.status && ns>=9 && r.status>=9){ toast('Reabra a solicitação antes de trocar entre Recusada/Cancelada.','warning'); return; }
+  let changed=false;
+  if(!isNaN(v) && v!==(r.value||0)){
+    r.value=v;
+    touchReq(r,'valor','Valor atualizado para R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2}));
+    changed=true;
   }
-  saveDB(); toast(reqId+': status atualizado.','success'); closeModal('detailModal');
-  if(document.getElementById('sec-admin-gestao').classList.contains('active')) renderAdminList();
-  if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
+  if(ns!==r.status){
+    if(ns>=9){ if(changed) saveDB(); openCloseModal(reqId,ns===9?'recusada':'cancelada'); return; }
+    if(r.status>=9){ if(changed) saveDB(); reopenReq(reqId,ns); closeModal('detailModal'); return; }
+    const old=r.status;
+    applyStatus(r,ns);
+    emailUser(r,old);
+    changed=true;
+  }
+  if(!changed){ toast('Nada foi alterado.','warning'); return; }
+  saveDB(); toast(reqId+': atualizado.','success'); closeModal('detailModal'); refreshAll();
 }
 function deleteReq(reqId){
   if(!confirm('Excluir a solicitação '+reqId+' permanentemente? Esta ação não pode ser desfeita.')) return;
@@ -1563,39 +1685,11 @@ function deleteReq(reqId){
   if(document.getElementById('sec-admin-gestao').classList.contains('active')) renderAdminList();
   if(document.getElementById('sec-admin-dash').classList.contains('active')) renderAdminDash();
 }
-function updateItemField(reqId, itemIdx, field, value){
-  const r = DB.requests.find(x=>x.id===reqId); if(!r||!r.items[itemIdx]) return;
-  r.items[itemIdx][field] = value;
-  // Recalcular valor total do request
-  r.value = r.items.reduce((a,it)=>a+(it.valorUnit||0)*(it.qty||1),0);
-}
 
-function updateItemStatus(reqId, itemIdx, newStatus){
-  const r = DB.requests.find(x=>x.id===reqId); if(!r||!r.items[itemIdx]) return;
-  r.items[itemIdx].itemStatus = newStatus;
-  // Recalcular status geral do pedido com base nos itens
-  const statuses = r.items.map(it=>it.itemStatus||0);
-  const allDone    = statuses.every(s=>s===2);
-  const allCancel  = statuses.every(s=>s===3);
-  const anyPartial = statuses.some(s=>s===1);
-  const anyDone    = statuses.some(s=>s===2);
-  const allPend    = statuses.every(s=>s===0);
-  if(allDone)         r.status = 8; // Finalizada
-  else if(allCancel)  r.status = 8;
-  else if(anyPartial||anyDone) r.status = 7; // Atendida Parcialmente
-  else if(allPend)    r.status = Math.min(r.status, 6);
-  // Atualizar select de status no modal se existir
-  const sel = document.getElementById('dtStatus');
-  if(sel) sel.value = r.status;
-}
 
-function saveItemsUpdate(reqId){
-  const r = DB.requests.find(x=>x.id===reqId); if(!r) return;
-  r.updatedAt = new Date().toISOString();
-  saveDB();
-  toast('✅ Itens atualizados com sucesso!','success');
-  showDetail(reqId);
-}
+
+
+
 
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 
@@ -1763,7 +1857,7 @@ function renderSavingBlock(r){
       + '</div>'
       + '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Observação</label>'
       + '<input id="savingObs_'+r.id+'" class="fc" placeholder="Ex: Negociação de desconto, prazo melhor..." style="font-size:13px;background:#fff;color:#2c3e30;border:1.5px solid #dce8de;"></div>'
-      + '<button class="btn btn-green btn-sm" style="margin-top:10px;" onclick="saveSaving(this.dataset.rid)" data-rid=\'+r.id+\'>💾 Registrar Saving</button>'
+      + '<button class="btn btn-green btn-sm" style="margin-top:10px;" onclick="saveSaving(this.dataset.rid)" data-rid="'+r.id+'">💾 Registrar Saving</button>'
       + '</div>';
   }
   return html;
@@ -1794,7 +1888,7 @@ function saveSaving(reqId){
     registeredBy:  CU.name,
     registeredAt:  new Date().toLocaleString('pt-BR')
   };
-  saveDB(); toast('Saving registrado!','success'); showDetail(reqId);
+  touchReq(r,'saving','Saving registrado'); saveDB(); toast('Saving registrado!','success'); showDetail(reqId);
 }
 
 function editSaving(reqId){
@@ -1971,6 +2065,11 @@ function renderQuoteTab(r){
       + '<div style="font-size:12px;color:#7f1d1d;margin-top:6px;">Por: <strong>'+al.approvedBy+'</strong> em '+al.approvedAt+'</div>'
       + (al.obs ? '<div style="font-size:12px;margin-top:4px;">'+al.obs+'</div>' : '')
       + '</div>';
+  } else if(al.status==='cancelada'){
+    alcadaHtml = '<div class="alcada-box" style="border-color:#b8c4cc;background:#f4f6f8;">'
+      + '<div style="font-weight:800;font-size:13px;margin-bottom:8px;">✖ Aprovação de Alçada</div>'
+      + '<span class="alcada-badge" style="background:#e8ecef;color:#445566;border:1px solid #b8c4cc;">Cancelada (solicitação encerrada)</span>'
+      + '</div>';
   } else if(al.requested){
     var canApprove = isDirecao()||isMaster()||(al.approverId&&al.approverId===CU.id);
     alcadaHtml = '<div class="alcada-box">'
@@ -1990,7 +2089,6 @@ function renderQuoteTab(r){
     alcadaHtml = '<div class="alcada-box">'
       + '<div style="font-weight:800;font-size:13px;margin-bottom:8px;">🔐 Aprovação de Alçada</div>'
       + '<div style="font-size:13px;color:#7a5c00;margin-bottom:10px;">Selecione o responsável que deverá aprovar esta solicitação.</div>'
-      + (canEdit ? '<button class="btn btn-yellow btn-sm" onclick="openApproverModal(\''+rid+'\')">📤 Solicitar Aprovação de Alçada</button>' : '')
       + '</div>';
   }
 
@@ -2082,7 +2180,7 @@ function addSupplier(reqId, numItems){
     totalValue+=v*qty;
   }
   r.quote.suppliers.push({id:'S'+Date.now(),name,cnpj,payTerm,delivTerm,obs,itemValues,totalValue});
-  saveDB(); toast('Fornecedor adicionado.','success'); showDetail(reqId);
+  touchReq(r,'orcamento','Fornecedor cotado: '+name); saveDB(); toast('Fornecedor adicionado.','success'); showDetail(reqId);
 }
 
 function removeSupplier(reqId, suppId){
@@ -2090,14 +2188,14 @@ function removeSupplier(reqId, suppId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
   if(r.quote.winnerId===suppId) r.quote.winnerId='';
   r.quote.suppliers=r.quote.suppliers.filter(s=>s.id!==suppId);
-  saveDB(); toast('Fornecedor removido.','success'); showDetail(reqId);
+  touchReq(r,'orcamento','Fornecedor removido da cotação'); saveDB(); toast('Fornecedor removido.','success'); showDetail(reqId);
 }
 
 function setWinner(reqId, suppId){
   if(!isMaster()) return;
   const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
   r.quote.winnerId=suppId;
-  saveDB(); toast('Fornecedor vencedor definido!','success'); showDetail(reqId);
+  touchReq(r,'orcamento','Fornecedor vencedor definido: '+((r.quote.suppliers.find(function(x){ return x.id===suppId; })||{}).name||'')); saveDB(); toast('Fornecedor vencedor definido!','success'); showDetail(reqId);
 }
 
 function saveBuyerAnalysis(reqId){
@@ -2106,7 +2204,7 @@ function saveBuyerAnalysis(reqId){
   if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
   const txt=(document.getElementById('buyerAnalysisInput')?.value||'').trim();
   r.quote.buyerAnalysis=txt;
-  saveDB(); toast('Análise salva.','success'); showDetail(reqId);
+  touchReq(r,'orcamento','Análise do comprador atualizada'); saveDB(); toast('Análise salva.','success'); showDetail(reqId);
 }
 
 function openFilePreview(fileId, reqId){
@@ -2132,7 +2230,7 @@ function attachQuoteFile(reqId, input){
     reader.onload=e=>{
       r.quote.files.push({id:'F'+Date.now()+Math.random().toString(36).slice(2),name:f.name,data:e.target.result,type:f.type,size:f.size,reqId});
       loaded++;
-      if(loaded===files.length){ saveDB(); toast(files.length+' arquivo(s) anexado(s).','success'); showDetail(reqId); }
+      if(loaded===files.length){ touchReq(r,'orcamento',files.length+' arquivo(s) de orçamento anexado(s)'); saveDB(); toast(files.length+' arquivo(s) anexado(s).','success'); showDetail(reqId); }
     };
     reader.readAsDataURL(f);
   });
@@ -2141,7 +2239,7 @@ function attachQuoteFile(reqId, input){
 function removeFile(reqId, fileId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
   r.quote.files=r.quote.files.filter(f=>f.id!==fileId);
-  saveDB(); toast('Arquivo removido.','success'); showDetail(reqId);
+  touchReq(r,'orcamento','Arquivo de orçamento removido'); saveDB(); toast('Arquivo removido.','success'); showDetail(reqId);
 }
 
 function openApproverModal(reqId){
@@ -2180,121 +2278,94 @@ function selectApprover(userId){
 function confirmRequestAlcada(){
   if(!_alcadaPendingReqId){ toast('Erro interno.','error'); return; }
   if(!_alcadaSelectedUserId){ toast('Selecione um aprovador.','error'); return; }
-
-  const r = DB.requests.find(x => x.id === _alcadaPendingReqId);
+  const r=DB.requests.find(function(x){ return x.id===_alcadaPendingReqId; });
   if(!r){ toast('Solicitação não encontrada.','error'); return; }
-
-  // Buscar aprovador — comparar como string para evitar type mismatch
-  const approver = DB.users.find(u => String(u.id) === String(_alcadaSelectedUserId));
+  if(r.status>=8){ toast('Solicitação encerrada — não é possível enviar para alçada.','error'); return; }
+  const approver=DB.users.find(function(u){ return String(u.id)===String(_alcadaSelectedUserId); });
   if(!approver){ toast('Aprovador não encontrado.','error'); return; }
-
-  // O e-mail de login É o campo email do usuário — garantir que existe
-  const emailDestino = (approver.email || '').trim();
-  if(!emailDestino){
-    toast('Usuário selecionado não tem e-mail cadastrado.','error');
-    return;
-  }
+  const emailDestino=(approver.email||'').trim();
+  if(!emailDestino){ toast('Usuário selecionado não tem e-mail cadastrado.','error'); return; }
 
   if(!r.alcada) r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
-  // Guardar histórico de alçadas anteriores
-  if(!r.alcada.history) r.alcada.history = [];
+  if(!r.alcada.history) r.alcada.history=[];
   if(r.alcada.requestedAt){
     r.alcada.history.push({
-      approverId: r.alcada.approverId, approverName: r.alcada.approverName,
-      requestedAt: r.alcada.requestedAt, status: r.alcada.status,
-      approvedBy: r.alcada.approvedBy, approvedAt: r.alcada.approvedAt, obs: r.alcada.obs
+      approverId:r.alcada.approverId, approverName:r.alcada.approverName,
+      requestedAt:r.alcada.requestedAt, status:r.alcada.status,
+      approvedBy:r.alcada.approvedBy, approvedAt:r.alcada.approvedAt, obs:r.alcada.obs
     });
   }
-  r.alcada.requested    = true;
-  r.alcada.requestedAt  = new Date().toLocaleString('pt-BR');
-  r.alcada.status       = 'pendente';
-  r.alcada.approverId   = approver.id;
-  r.alcada.approverName = approver.name;
-  r.alcada.approverEmail= emailDestino;
-  r.alcada.approvedBy   = '';
-  r.alcada.approvedAt   = '';
-  r.alcada.obs          = '';
+  r.alcada.requested=true;
+  r.alcada.requestedAt=new Date().toLocaleString('pt-BR');
+  r.alcada.requestedById=CU.id;
+  r.alcada.requestedByName=CU.name;
+  r.alcada.status='pendente';
+  r.alcada.approverId=approver.id;
+  r.alcada.approverName=approver.name;
+  r.alcada.approverEmail=emailDestino;
+  r.alcada.approvedBy=''; r.alcada.approvedAt=''; r.alcada.obs='';
 
-  // Notificação interna
-  if(!approver.notifications) approver.notifications = [];
-  approver.notifications.push({
-    id:'N'+Date.now(), type:'alcada', reqId:r.id, read:false,
-    msg:'Aprovação de alçada solicitada para '+r.id+' ('+r.requester+')',
-    at:new Date().toLocaleString('pt-BR')
-  });
+  if(!approver.notifications) approver.notifications=[];
+  approver.notifications.push({id:'N'+Date.now(),type:'alcada',reqId:r.id,read:false,
+    msg:'Aprovação de alçada solicitada para '+r.id+' ('+r.requester+')',at:new Date().toLocaleString('pt-BR')});
 
+  touchReq(r,'alcada','Enviado para aprovação de alçada: '+approver.name);
+  const oldStatus=r.status;
+  if(r.status<3) applyStatus(r,3,{reason:'Enviado para aprovação de alçada'});
   saveDB();
   closeModal('approverModal');
   toast('Solicitação enviada para '+approver.name+' ('+emailDestino+')!','success');
+  if(r.status!==oldStatus) emailUser(r,oldStatus);
 
-  // ── Enviar e-mail via GAS ────────────────────────────────
   if(!GAS_URL){
     toast('GAS não configurado — e-mail não enviado.','error');
   } else {
-    const _winner = (r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
-    const payload = {
-      action:        'sendAlcadaEmail',
-      to:            emailDestino,
-      approverName:  approver.name,
-      reqId:         r.id,
-      requester:     r.requester,
-      sector:        r.sector||'—',
-      items:         (r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
-      value:         r.value||0,
-      winnerName:    _winner ? _winner.name : 'Não definido',
-      winnerValue:   _winner ? (_winner.totalValue||0) : 0,
-      buyerAnalysis: r.quote ? (r.quote.buyerAnalysis||'') : '',
-      requestedBy:   CU.name,
-      date:          new Date().toLocaleString('pt-BR')
-    };
-    console.log('Enviando e-mail de alçada para:', emailDestino, 'payload:', JSON.stringify(payload));
-    gasPost(payload).then(function(res){
-      console.log('GAS sendAlcadaEmail resposta:', JSON.stringify(res));
-      if(res && res.success){
-        toast('📧 E-mail enviado para '+emailDestino,'success');
-      } else {
-        var msg = (res && res.error) ? res.error : 'Sem resposta do GAS';
-        toast('⚠ Falha no e-mail: '+msg,'error');
-        console.error('Detalhe da falha de e-mail:', res);
-      }
+    const w=(r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
+    gasPost({
+      action:'sendAlcadaEmail', to:emailDestino, approverName:approver.name,
+      reqId:r.id, requester:r.requester, sector:reqSector(r),
+      items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+      value:r.value||0,
+      winnerName:w?w.name:'Não definido', winnerValue:w?(w.totalValue||0):0,
+      buyerAnalysis:r.quote?(r.quote.buyerAnalysis||''):'',
+      requestedBy:CU.name, date:new Date().toLocaleString('pt-BR')
+    }).then(function(res){
+      if(res && res.success){ toast('📧 E-mail enviado para '+emailDestino,'success'); }
+      else { toast('⚠ Falha no e-mail: '+((res&&res.error)?res.error:'Sem resposta do GAS'),'error'); console.error('Falha e-mail alçada:',res); }
     });
   }
-
-  showDetail(_alcadaPendingReqId);
-  _alcadaPendingReqId = null;
-  _alcadaSelectedUserId = null;
-  updateNotifBadge();
+  const rid=_alcadaPendingReqId;
+  _alcadaPendingReqId=null; _alcadaSelectedUserId=null;
+  refreshAll(rid);
+  showDetail(rid);
 }
 
-function resolveAlcada(reqId, decision){
-  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.alcada) return;
-  const isDesignated = r.alcada.approverId===CU.id;
-  if(!isDirecao()&&!isMaster()&&!isDesignated){
-    toast('Sem permissão para aprovar esta solicitação.','error'); return;
-  }
+function resolveAlcada(reqId,decision){
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r||!r.alcada) return;
+  const designated=String(r.alcada.approverId)===String(CU.id);
+  if(!isDirecao()&&!isMaster()&&!designated){ toast('Sem permissão para aprovar esta solicitação.','error'); return; }
+  if(r.alcada.status!=='pendente'){ toast('Esta alçada já foi decidida.','warning'); return; }
   const obs=(document.getElementById('alcadaObs')?.value||'').trim();
   r.alcada.status=decision;
   r.alcada.approvedBy=CU.name;
   r.alcada.approvedAt=new Date().toLocaleString('pt-BR');
   r.alcada.obs=obs;
+  const ok=(decision==='aprovada');
+  touchReq(r,'alcada','Alçada '+(ok?'APROVADA':'REJEITADA')+' por '+CU.name+(obs?' — '+obs:''));
+  if(ok && r.status===3) applyStatus(r,4,{reason:'Alçada aprovada'});
   saveDB();
-  // Notificar o solicitante original via e-mail
-  const solicitante=DB.users.find(u=>u.id===r.userId);
-  if(GAS_URL&&solicitante&&solicitante.email){
-    gasPost({
-      action:    'sendStatusEmail',
-      to:        solicitante.email,
-      userName:  solicitante.name,
-      reqId:     r.id,
-      items:     (r.items||[]).map(i=>i.desc+' x'+i.qty).join(', '),
-      oldStatus: 'Aguardando Aprovação de Alçada',
-      newStatus: decision==='aprovada'?'✅ Alçada Aprovada por '+CU.name:'❌ Alçada Rejeitada por '+CU.name,
-      date:      new Date().toLocaleDateString('pt-BR')
-    });
+
+  const titulo=ok?'✅ Alçada Aprovada por '+CU.name:'❌ Alçada Rejeitada por '+CU.name;
+  const sol=DB.users.find(function(u){ return u.id===r.userId; });
+  if(GAS_URL && sol && sol.email){
+    gasPost({action:'sendStatusEmail',to:sol.email,userName:sol.name,reqId:r.id,
+      items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+      oldStatus:'Aguardando Aprovação de Alçada',newStatus:titulo,reason:obs,
+      attendedBy:r.attendedBy?r.attendedBy.name:'',date:new Date().toLocaleDateString('pt-BR')});
   }
-  toast(decision==='aprovada'?'✅ Solicitação aprovada!':'Solicitação rejeitada.',
-        decision==='aprovada'?'success':'warning');
-  updateNotifBadge();
+  emailStaff(r,titulo+' ('+r.requester+')',obs);
+  toast(ok?'✅ Solicitação aprovada!':'Solicitação rejeitada.',ok?'success':'warning');
+  refreshAll(reqId);
   showDetail(reqId);
 }
 
@@ -2309,33 +2380,21 @@ function renderAdminDash(){
   const totalSaving = all.reduce((acc,r)=>acc+(r.saving&&r.saving.value?r.saving.value:0),0);
   const savingCount = all.filter(r=>r.saving&&r.saving.registeredAt).length;
 
-  // ── KPI: Tempo médio entre atualizações ──────────────────
-  // Para cada solicitação aberta, considerar o tempo desde createdAt até updatedAt
-  // (ou até agora se nunca foi atualizada)
-  const updateTimes = all
-    .filter(r=>r.status>0) // só as que foram pelo menos uma vez atualizadas
-    .map(r=>{
-      const created = new Date(r.createdAt||r.date);
-      const updated = r.updatedAt ? new Date(r.updatedAt) : now;
-      return (updated - created) / 36e5; // horas
-    })
-    .filter(h=>h>=0&&h<8760); // ignorar valores absurdos (>1 ano)
-  const avgUpdateHours = updateTimes.length
-    ? updateTimes.reduce((a,b)=>a+b,0) / updateTimes.length : 0;
-  const avgUpdateDays = (avgUpdateHours/24).toFixed(1);
+  // ── KPI: Tempo médio até o 1º atendimento (criação → 1ª ação da equipe) ──
+  const respTimes = all.map(r=>{
+    const fr = firstResponseDate(r); if(!fr) return null;
+    return (fr - new Date(r.createdAt||r.date)) / 36e5;
+  }).filter(h=>h!==null&&h>=0&&h<8760);
+  const avgRespTxt = respTimes.length ? fmtDur(respTimes.reduce((a,b)=>a+b,0)/respTimes.length*36e5) : '—';
 
-  // ── KPI: Tempo médio de finalização ──────────────────────
+  // ── KPI: Tempo médio de atendimento até finalizar ──
   const finTimes = all
-    .filter(r=>r.status===8&&r.updatedAt)
-    .map(r=>{
-      const created  = new Date(r.createdAt||r.date);
-      const finished = new Date(r.updatedAt);
-      return (finished - created) / 36e5; // horas
-    })
+    .filter(r=>r.status===8)
+    .map(r=>(new Date(r.finishedAt||r.updatedAt) - new Date(r.createdAt||r.date)) / 36e5)
     .filter(h=>h>=0&&h<8760);
-  const avgFinHours = finTimes.length
-    ? finTimes.reduce((a,b)=>a+b,0) / finTimes.length : 0;
-  const avgFinDays = (avgFinHours/24).toFixed(1);
+  const avgFinTxt = finTimes.length ? fmtDur(finTimes.reduce((a,b)=>a+b,0)/finTimes.length*36e5) : '—';
+  const recus = all.filter(r=>r.status===9).length, cancel = all.filter(r=>r.status===10).length;
+  const emAlcada = all.filter(r=>r.alcada&&r.alcada.status==='pendente'&&r.status<9).length;
 
   // ── Stat cards ─────────────────────────────────────────
   const sc = totalSaving>=0?'var(--green)':'var(--red)';
@@ -2344,16 +2403,18 @@ function renderAdminDash(){
     <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Novas (Abertas)</div><div class="stat-val">${pend}</div></div>
     <div class="stat-card red"><span class="stat-icon">⚠</span><div class="stat-lbl">Urgentes</div><div class="stat-val">${urg}</div></div>
     <div class="stat-card"><span class="stat-icon">✅</span><div class="stat-lbl">Finalizadas</div><div class="stat-val">${fin}</div></div>
+    <div class="stat-card yellow"><span class="stat-icon">🔐</span><div class="stat-lbl">Em Alçada</div><div class="stat-val">${emAlcada}</div></div>
+    <div class="stat-card red"><span class="stat-icon">🚫</span><div class="stat-lbl">Recusadas / Canceladas</div><div class="stat-val" style="font-size:20px;">${recus} / ${cancel}</div></div>
     <div class="stat-card" style="border-left-color:#1f6feb;">
       <span class="stat-icon">🕐</span>
-      <div class="stat-lbl">Tempo Médio 1ª Atualização</div>
-      <div class="stat-val" style="font-size:18px;">${avgUpdateDays}d</div>
-      <div class="stat-sub" style="font-size:10.5px;color:#6b8570;margin-top:2px;">${updateTimes.length} sol. consideradas</div>
+      <div class="stat-lbl">Tempo Médio 1º Atendimento</div>
+      <div class="stat-val" style="font-size:18px;">${avgRespTxt}</div>
+      <div class="stat-sub" style="font-size:10.5px;color:#6b8570;margin-top:2px;">${respTimes.length} sol. consideradas</div>
     </div>
     <div class="stat-card" style="border-left-color:#8b5cf6;">
       <span class="stat-icon">🏁</span>
       <div class="stat-lbl">Tempo Médio de Finalização</div>
-      <div class="stat-val" style="font-size:18px;">${avgFinDays}d</div>
+      <div class="stat-val" style="font-size:18px;">${avgFinTxt}</div>
       <div class="stat-sub" style="font-size:10.5px;color:#6b8570;margin-top:2px;">${finTimes.length} finalizadas</div>
     </div>`;
   if(isMaster()){
@@ -2366,6 +2427,7 @@ function renderAdminDash(){
     </div>`;
   }
   document.getElementById('adminStats').innerHTML = statsHtml;
+  renderAttendantChart(all);
 
   // ── Alertas de urgência ────────────────────────────────
   const urg2 = all.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8);
@@ -2381,26 +2443,18 @@ function renderAdminDash(){
         <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
       </div>`).join('');
 
-  // ── Paradas +7 dias: SEM nenhuma atualização (updatedAt === createdAt ou null) ──
-  const stale = all.filter(r=>{
-    if(r.status===0||r.status===8) return false; // só em andamento
-    const created = new Date(r.createdAt||r.date);
-    // "Sem atualização" = updatedAt igual a createdAt (nunca foi tocada) ou não tem updatedAt
-    const lastUpdate = r.updatedAt ? new Date(r.updatedAt) : created;
-    const daysSinceUpdate = (now - lastUpdate) / 864e5;
-    return daysSinceUpdate > 7;
-  });
+  // ── Paradas +7 dias: ABERTAS sem NENHUMA atividade (status, item, chat, cotação, alçada...) ──
+  const stale = all.filter(isStale).sort((x,y)=>lastActivityDate(x)-lastActivityDate(y));
   const stEl = document.getElementById('staleAlerts');
   if(stEl) stEl.innerHTML = !stale.length
     ? '<div style="color:#7a9a80;font-size:13px;padding:10px 0;">Nenhuma parada.</div>'
     : stale.map(r=>{
-        const lastUpdate = r.updatedAt ? new Date(r.updatedAt) : new Date(r.createdAt||r.date);
-        const daysSince  = Math.floor((now-lastUpdate)/864e5);
+        const last=(r.activity||[])[(r.activity||[]).length-1];
         return `<div class="alert-card stale">
           <span style="font-size:20px;">⌛</span>
           <div style="flex:1">
-            <div style="font-weight:800;font-size:13px;">${r.id}</div>
-            <div style="font-size:11.5px;color:#7a9a80;">${r.requester} | sem atualização há ${daysSince}d</div>
+            <div style="font-weight:800;font-size:13px;">${r.id} ${r.attendedBy?'<span style="font-weight:600;font-size:11px;color:#5a7a60;">👤 '+esc(r.attendedBy.name)+'</span>':''}</div>
+            <div style="font-size:11.5px;color:#7a9a80;">${esc(r.requester)} | sem atividade há ${Math.floor(daysSinceUpdate(r))}d${last?' (última: '+esc(last.text.slice(0,40))+')':''}</div>
           </div>
           <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
         </div>`;
@@ -2428,7 +2482,7 @@ function renderAdminDash(){
   all.forEach(r=>{
     if(!buVal[r.requester]) buVal[r.requester]={count:0,value:0,finished:0};
     buVal[r.requester].count++;
-    buVal[r.requester].value+=(r.value||0);
+    if(r.status<9) buVal[r.requester].value+=(r.value||0);
     if(r.status===8) buVal[r.requester].finished++;
   });
   const valE=Object.entries(buVal).sort((a,b)=>b[1].value-a[1].value);
@@ -2476,26 +2530,59 @@ function renderAdminDash(){
 
 
 // ── ADMIN LIST ──
-function buildStatusFilter(){ document.getElementById('fStatus').innerHTML='<option value="">Todos os Status</option>'+DB.statusLabels.map((l,i)=>`<option value="${i}">${l}</option>`).join(''); }
+function buildStatusFilter(){
+  document.getElementById('fStatus').innerHTML='<option value="">Todos os Status</option>'+DB.statusLabels.map(function(l,i){ return '<option value="'+i+'">'+l+'</option>'; }).join('');
+  fillAttendantSelect('fAtend');
+}
 function renderAdminList(){
-  let reqs=[...DB.requests].sort((a,b)=>new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date));
-  const fs=document.getElementById('fStatus')?.value; const fp=document.getElementById('fPriority')?.value;
-  if(fs!==''&&fs!==undefined) reqs=reqs.filter(r=>r.status===parseInt(fs));
-  if(fp) reqs=reqs.filter(r=>r.type===fp||r.type===fp.replace('NAO','NÃO'));
+  let reqs=[...DB.requests].sort(function(a,b){ return new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date); });
+  const fs=document.getElementById('fStatus')?.value, fp=document.getElementById('fPriority')?.value;
+  const fa=document.getElementById('fAtend')?.value||'';
+  const q=(document.getElementById('fSearch')?.value||'').trim().toLowerCase();
+  const onlyStale=!!document.getElementById('fStale')?.checked;
+  if(fs!==''&&fs!==undefined) reqs=reqs.filter(function(r){ return r.status===parseInt(fs); });
+  if(fp) reqs=reqs.filter(function(r){ return r.type===fp||r.type===fp.replace('NAO','NÃO'); });
+  if(fa) reqs=reqs.filter(function(r){ return attendMatches(r,fa); });
+  if(onlyStale) reqs=reqs.filter(isStale);
+  if(q) reqs=reqs.filter(function(r){ return (r.id+' '+r.requester+' '+r.items.map(function(i){ return i.desc; }).join(' ')).toLowerCase().indexOf(q)>=0; });
   const el=document.getElementById('adminReqList');
   if(!reqs.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhuma solicitação.</div>'; return; }
-  el.innerHTML=reqs.map(r=>`<div class="areq-row ${r.type==='IMEDIATA'||r.type==='URGENTE'?'urg':''}">
-    <div style="flex:1;min-width:200px;">
-      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:3px;"><strong style="font-size:12.5px;">${r.id}</strong>${urgBadge(r.type)} ${statusBadge(r.status)}</div>
-      <div style="font-size:13px;font-weight:700;">${r.items.map(i=>i.desc).join(', ')}</div>
-      <div style="font-size:11.5px;color:var(--g500);">${r.requester} | ${r.date} | ${r.items.length} item(s)</div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <select class="ssel" onchange="quickUpd('${r.id}',this.value)">${DB.statusLabels.map((l,i)=>`<option value="${i}" ${i===r.status?'selected':''}>${l}</option>`).join('')}</select>
-      <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Detalhes</button>
-    </div></div>`).join('');
+  el.innerHTML=reqs.map(function(r){
+    const stale=isStale(r), closed=r.status>=8;
+    return '<div class="areq-row '+(r.type==='IMEDIATA'||r.type==='URGENTE'?'urg':'')+'">'
+    +'<div style="flex:1;min-width:220px;">'
+      +'<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:3px;"><strong style="font-size:12.5px;">'+r.id+'</strong>'+urgBadge(r.type)+' '+statusBadge(r.status)+' '+alcadaChip(r)+'</div>'
+      +'<div style="font-size:13px;font-weight:700;">'+r.items.map(function(i){ return esc(i.desc); }).join(', ')+'</div>'
+      +'<div style="font-size:11.5px;color:var(--g500);">'+esc(r.requester)+' | '+r.date+' | '+r.items.length+' item(s)</div>'
+      +'<div style="font-size:11.5px;color:#5a7a60;margin-top:3px;display:flex;gap:12px;flex-wrap:wrap;">'
+        +'<span>👤 '+(r.attendedBy?esc(r.attendedBy.name):'<em>sem atendente</em>')+'</span>'
+        +'<span>⏱ '+(closed?'atendimento ':'aberta há ')+ageLabel(r)+'</span>'
+        +'<span style="'+(stale?'color:#b7791f;font-weight:800;':'')+'">🕒 '+(closed?'encerrada '+fmtDT(r.finishedAt||r.updatedAt):'atualizada há '+sinceUpdateLabel(r))+(stale?' ⚠':'')+'</span></div>'
+      +((r.status>=9&&r.closure&&r.closure.reason)?'<div style="font-size:11.5px;color:#9b1c1a;margin-top:3px;font-style:italic;">Motivo: '+esc(r.closure.reason)+'</div>':'')
+    +'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+      +'<select class="ssel" onchange="quickUpd(\''+r.id+'\',this.value)">'+DB.statusLabels.map(function(l,i){ return '<option value="'+i+'"'+(i===r.status?' selected':'')+'>'+l+'</option>'; }).join('')+'</select>'
+      +((isMaster()&&r.status<8)?'<button class="btn btn-yellow btn-sm" onclick="openApproverModal(\''+r.id+'\')">📤 Alçada</button>':'')
+      +((isAdmin()&&r.status<8)?'<button class="btn btn-danger btn-sm" onclick="openCloseModal(\''+r.id+'\',\'recusada\')">🚫 Recusar</button><button class="btn btn-outline btn-sm" onclick="openCloseModal(\''+r.id+'\',\'cancelada\')">✖ Cancelar</button>':'')
+      +'<button class="btn btn-outline btn-sm" onclick="showDetail(\''+r.id+'\')">Detalhes</button>'
+    +'</div></div>';
+  }).join('');
 }
-function quickUpd(reqId,val){ const r=DB.requests.find(x=>x.id===reqId); if(!r) return; const oldStatus=r.status; r.status=parseInt(val); if(oldStatus!==r.status) emailUser(r,oldStatus); saveDB(); toast(reqId+': status atualizado.','success'); renderAdminList(); }
+function quickUpd(reqId,val){
+  if(!isAdmin()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  const ns=parseInt(val);
+  if(ns===r.status) return;
+  if(ns>=9){
+    renderAdminList();
+    if(r.status>=9){ toast('Reabra a solicitação antes de trocar entre Recusada/Cancelada.','warning'); return; }
+    openCloseModal(reqId,ns===9?'recusada':'cancelada'); return;
+  }
+  if(r.status>=9){ reopenReq(reqId,ns); return; }
+  const old=r.status;
+  applyStatus(r,ns); emailUser(r,old);
+  saveDB(); toast(reqId+': status atualizado.','success'); renderAdminList();
+}
 
 // ── USERS PAGE (Somente Master) ──
 function updatePendingBadge(){
@@ -2537,8 +2624,7 @@ function renderUsersPage(){
         </div>
         <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--g100);">
           <select class="ssel" id="role-p-${u.id}">
-            <option value="user" ${u.role==='user'?'selected':''}>Usuário</option>
-            <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
+            ${roleOptions(u)}
           </select>
           <button class="btn btn-danger btn-sm" onclick="rejectUser(${u.id})">✕ Recusar</button>
           <button class="btn btn-green btn-sm" onclick="approveUser(${u.id},'role-p-${u.id}')">✔ Aceitar</button>
@@ -2562,12 +2648,12 @@ function renderUsersPage(){
           <span class="badge badge-green" style="flex-shrink:0;">✔ Ativo</span>
         </div>
         <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--g100);">
-          ${u.role!=='master'
-            ?`<select class="ssel" id="role-a-${u.id}"><option value="user" ${u.role==='user'?'selected':''}>Usuário</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>
+          ${(!isMainMaster(u)&&u.id!==CU.id)
+            ?`<select class="ssel" id="role-a-${u.id}">${roleOptions(u)}</select>
                <button class="btn btn-yellow btn-sm" onclick="changeRole(${u.id},'role-a-${u.id}')">Alterar Cargo</button>
                <button class="btn btn-yellow btn-sm" onclick="revogarUser(${u.id},'${u.name.replace(/'/g,"\'")}')">🔒 Revogar</button>
                <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id},'${u.name.replace(/'/g,"\'")}')">Excluir</button>`
-            :'<span style="font-size:11px;color:var(--g500);padding:4px 0;">Conta Master protegida</span>'}
+            :'<span style="font-size:11px;color:var(--g500);padding:4px 0;">'+(isMainMaster(u)?'Conta Master principal protegida':'Seu usuário')+'</span>'}
         </div>
       </div>`).join('');
 
@@ -2597,14 +2683,37 @@ function renderUsersPage(){
 }
 
 function approveUser(uid,roleSelId){
-  const u=DB.users.find(x=>x.id===uid); if(!u) return;
-  if(roleSelId){ const sel=document.getElementById(roleSelId); if(sel) u.role=sel.value; }
+  const u=DB.users.find(function(x){ return x.id===uid; }); if(!u) return;
+  if(roleSelId){
+    const sel=document.getElementById(roleSelId);
+    if(sel){
+      if(sel.value==='master' && !isMainMaster(CU)){ toast('Somente o Master principal pode conceder o cargo Master.','error'); return; }
+      u.role=sel.value;
+    }
+  }
   u.status='active'; saveDB(); toast(u.name+' aprovado!','success'); renderUsersPage(); updatePendingBadge();
 }
 function rejectUser(uid){ const u=DB.users.find(x=>x.id===uid); if(!u) return; if(confirm('Recusar cadastro de "'+u.name+'"? O usuário será removido.')){ DB.users=DB.users.filter(x=>x.id!==uid); saveDB(); toast('Cadastro recusado.','warning'); renderUsersPage(); updatePendingBadge(); } }
-function revogarUser(uid,uname){ if(!confirm('Revogar acesso de "'+uname+'"?')){ return; } const u=DB.users.find(x=>x.id===uid); if(!u) return; u.status='revoked'; saveDB(); toast(uname+': acesso revogado.','warning'); renderUsersPage(); }
-function deleteUser(uid,uname){ if(confirm('Excluir "'+uname+'" permanentemente?')){ DB.users=DB.users.filter(x=>x.id!==uid); saveDB(); toast(uname+' excluído.','warning'); renderUsersPage(); } }
-function changeRole(uid,selId){ const u=DB.users.find(x=>x.id===uid); if(!u) return; const sel=document.getElementById(selId); if(!sel) return; u.role=sel.value; saveDB(); toast(u.name+': cargo atualizado para '+u.role+'.','success'); renderUsersPage(); }
+function revogarUser(uid,uname){
+  const u=DB.users.find(function(x){ return x.id===uid; }); if(!u) return;
+  if(isMainMaster(u)||u.id===CU.id){ toast('Esta conta não pode ser revogada.','error'); return; }
+  if(u.role==='master' && !isMainMaster(CU)){ toast('Somente o Master principal revoga outro Master.','error'); return; }
+  if(!confirm('Revogar acesso de "'+uname+'"?')) return;
+  u.status='revoked'; saveDB(); toast(uname+': acesso revogado.','warning'); renderUsersPage();
+}
+function deleteUser(uid,uname){
+  const u=DB.users.find(function(x){ return x.id===uid; }); if(!u) return;
+  if(isMainMaster(u)||u.id===CU.id){ toast('Esta conta não pode ser excluída.','error'); return; }
+  if(u.role==='master' && !isMainMaster(CU)){ toast('Somente o Master principal exclui outro Master.','error'); return; }
+  if(confirm('Excluir "'+uname+'" permanentemente?')){ DB.users=DB.users.filter(function(x){ return x.id!==uid; }); saveDB(); toast(uname+' excluído.','warning'); renderUsersPage(); }
+}
+function changeRole(uid,selId){
+  const u=DB.users.find(function(x){ return x.id===uid; }); if(!u) return;
+  const sel=document.getElementById(selId); if(!sel) return;
+  if(isMainMaster(u)||u.id===CU.id){ toast('Esta conta não pode ter o cargo alterado aqui.','error'); return; }
+  if((sel.value==='master'||u.role==='master') && !isMainMaster(CU)){ toast('Somente o Master principal altera o cargo Master.','error'); return; }
+  u.role=sel.value; saveDB(); toast(u.name+': cargo atualizado.','success'); renderUsersPage();
+}
 
 // ── CATEGORIAS ──
 function renderCats(){
@@ -2789,11 +2898,585 @@ function showNotifs(){
 // ── VIEW FILE ──// ── VIEW FILE ──
 function viewFile(f){ const ov=document.createElement('div'); ov.className='file-viewer-overlay'; ov.onclick=e=>{ if(e.target===ov) ov.remove(); }; ov.innerHTML=`<div class="file-viewer-inner"><button class="file-viewer-close" onclick="this.closest('.file-viewer-overlay').remove()">✕ Fechar</button><img src="${f.data}" alt="${f.name}"></div>`; document.body.appendChild(ov); }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  v2 — ATIVIDADE · ATENDENTE · RECUSA/CANCELAMENTO · ITENS · APROVAÇÕES
+// ═══════════════════════════════════════════════════════════════════════════
+let _detailOpenId = null;
+let _closeCtx = null;
+
+// ── Utilitários ───────────────────────────────────────────────────────────
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
+}
+function stLabel(s){ return (DB.statusLabels&&DB.statusLabels[s]) || DEFAULT_STATUS_LABELS[s] || ('Status '+s); }
+function isMainMaster(u){ return !!u && u.email===MAIN_MASTER_EMAIL; }
+function reqSector(r){
+  if(r.sector) return r.sector;
+  const u = DB.users.find(function(x){ return x.id===r.userId; });
+  return (u&&u.sector) || '—';
+}
+function fmtDur(ms){
+  if(!isFinite(ms)||ms<0) ms=0;
+  const m=Math.floor(ms/6e4), h=Math.floor(m/60), d=Math.floor(h/24);
+  if(d>=1) return d+'d '+(h%24)+'h';
+  if(h>=1) return h+'h '+(m%60)+'min';
+  return m+'min';
+}
+function fmtDT(iso){
+  if(!iso) return '—';
+  const d=new Date(iso);
+  if(isNaN(d)) return String(iso);
+  return d.toLocaleDateString('pt-BR')+' '+d.toTimeString().slice(0,5);
+}
+function lastActivityDate(r){ return new Date(r.updatedAt||r.createdAt||r.date); }
+function daysSinceUpdate(r){ return (Date.now()-lastActivityDate(r))/864e5; }
+// "Parada" = solicitação ABERTA sem nenhuma atividade (status, item, chat, cotação, alçada...) há mais de 7 dias
+function isStale(r){ return r.status<8 && daysSinceUpdate(r)>STALE_DAYS; }
+function ageLabel(r){
+  const start=new Date(r.createdAt||r.date);
+  const end = r.status>=8 ? new Date(r.finishedAt||r.updatedAt||Date.now()) : new Date();
+  return fmtDur(end-start);
+}
+function sinceUpdateLabel(r){ return fmtDur(Date.now()-lastActivityDate(r)); }
+function firstResponseDate(r){
+  if(r.firstResponseAt) return new Date(r.firstResponseAt);
+  const h=(r.statusHistory||[])[0];
+  return h&&h.at ? new Date(h.at) : null;
+}
+function reqItemsTotal(r){
+  return (r.items||[]).reduce(function(a,it){
+    const s=it.itemStatus||0;
+    return (s===3||s===4) ? a : a+(it.valorUnit||0)*(it.qty||1);
+  },0);
+}
+function roleOptions(u){
+  const opts=[['user','Usuário'],['admin','Admin'],['master','Master'],['direcao','Direção']];
+  return opts.map(function(o){ return '<option value="'+o[0]+'"'+(u.role===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('');
+}
+function attendBadge(r){
+  return (r.attendedBy&&r.attendedBy.name)
+    ? '<span class="badge badge-navy">👤 Atendido por '+esc(r.attendedBy.name)+'</span>'
+    : '<span class="badge badge-gray">👤 Sem atendente</span>';
+}
+function attendedIs(r,uid){
+  if(!r.attendedBy) return false;
+  if(r.attendedBy.id!=null && r.attendedBy.id!=='') return String(r.attendedBy.id)===String(uid);
+  const u=DB.users.find(function(x){ return String(x.id)===String(uid); });
+  return !!u && r.attendedBy.name===u.name;
+}
+function attendMatches(r,fa){
+  if(!fa) return true;
+  if(fa==='none') return !r.attendedBy;
+  return attendedIs(r,fa);
+}
+function alcadaChip(r){
+  const a=r.alcada; if(!a||!a.status) return '';
+  if(a.status==='pendente')  return '<span class="badge badge-yellow">🔐 Alçada: aguardando '+esc(a.approverName||'')+'</span>';
+  if(a.status==='aprovada')  return '<span class="badge badge-green">🔐 Alçada aprovada</span>';
+  if(a.status==='rejeitada') return '<span class="badge badge-red">🔐 Alçada rejeitada</span>';
+  return '';
+}
+
+// ── Registro de atividade (reseta o contador de "parada") ─────────────────
+// Toda ação dentro da solicitação chama touchReq: status, item, chat, cotação, alçada, saving...
+function touchReq(r,type,text,opts){
+  opts=opts||{};
+  const now=new Date().toISOString();
+  if(!Array.isArray(r.activity)) r.activity=[];
+  r.activity.push({at:now,by:CU?CU.name:'Sistema',byId:CU?CU.id:null,type:type,text:text||''});
+  if(r.activity.length>150) r.activity=r.activity.slice(-150);
+  r.updatedAt=now; r.lastActivityAt=now;
+  // Quem da equipe (Master/Admin) mexe primeiro passa a constar como "atendente"
+  if(CU && isAdmin() && !opts.noAttend){
+    if(!r.firstResponseAt) r.firstResponseAt=now;
+    if(!r.attendedBy) r.attendedBy={id:CU.id,name:CU.name,at:now};
+  }
+}
+function applyStatus(r,newStatus,opts){
+  opts=opts||{};
+  const old=r.status;
+  if(old===newStatus) return false;
+  const now=new Date().toISOString();
+  r.status=newStatus;
+  if(!Array.isArray(r.statusHistory)) r.statusHistory=[];
+  r.statusHistory.push({from:old,to:newStatus,at:now,by:CU?CU.name:'Sistema',reason:opts.reason||''});
+  r.finishedAt = newStatus>=8 ? now : '';
+  touchReq(r,'status','Status: '+stLabel(old)+' → '+stLabel(newStatus)+(opts.reason?' — '+opts.reason:''));
+  return true;
+}
+function assignAttendant(reqId,uid){
+  if(!isAdmin()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  if(!uid){ r.attendedBy=null; touchReq(r,'atendente','Atendente removido',{noAttend:true}); }
+  else {
+    const u=DB.users.find(function(x){ return String(x.id)===String(uid); }); if(!u) return;
+    r.attendedBy={id:u.id,name:u.name,at:new Date().toISOString()};
+    touchReq(r,'atendente','Atendimento atribuído a '+u.name,{noAttend:true});
+  }
+  saveDB(); toast('Atendente atualizado.','success'); refreshAll(reqId);
+}
+
+// ── Permissões ────────────────────────────────────────────────────────────
+function canViewReq(r){
+  if(!CU||!r) return false;
+  if(isAdmin()||isDirecao()) return true;
+  if(r.userId===CU.id) return true;
+  const a=r.alcada;
+  if(!a) return false;
+  if(String(a.approverId)===String(CU.id)) return true;
+  return (a.history||[]).some(function(h){ return String(h.approverId)===String(CU.id); });
+}
+function canSeeQuoteFor(r){
+  if(!CU||!r) return false;
+  if(isMaster()||isDirecao()) return true;
+  const a=r.alcada;
+  return !!(a && String(a.approverId)===String(CU.id));
+}
+function pendingAlcadasForMe(){
+  if(!CU) return [];
+  return DB.requests.filter(function(r){
+    return r.alcada && r.alcada.status==='pendente' && r.status<9
+      && (String(r.alcada.approverId)===String(CU.id) || isDirecao());
+  });
+}
+function updateNotifBadge(){
+  if(!CU) return;
+  const ap=pendingAlcadasForMe().length;
+  const base=(isAdmin()||isDirecao())?DB.requests:DB.requests.filter(function(r){ return r.userId===CU.id; });
+  const uc=base.filter(function(r){ return (r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8; }).length;
+  const ndot=document.getElementById('ndot');
+  if(ndot){ ndot.style.display=(uc+ap)>0?'block':'none'; ndot.style.background=ap>0?'#d4ac0d':'var(--red)'; }
+  const nb=document.getElementById('navAP');
+  if(nb){ nb.textContent=ap; nb.style.display=ap>0?'inline':'none'; }
+}
+
+// ── Re-render geral após uma ação ─────────────────────────────────────────
+function refreshAll(reqId){
+  const dm=document.getElementById('detailModal');
+  if(reqId && dm && !dm.classList.contains('hidden') && _detailOpenId===reqId) showDetail(reqId);
+  const act=function(id){ const e=document.getElementById('sec-'+id); return !!(e&&e.classList.contains('active')); };
+  if(act('admin-gestao')) renderAdminList();
+  if(act('admin-itens'))  renderAdminItems();
+  if(act('admin-dash'))   renderAdminDash();
+  if(act('minhas'))     { renderMySols(); renderMyItems(); }
+  if(act('aprovacoes'))   renderAprovacoes();
+  if(act('dashboard'))    renderUserDash();
+  updateNotifBadge();
+}
+
+// ── E-mails ───────────────────────────────────────────────────────────────
+function emailStaff(r,title,reason){
+  if(!GAS_URL) return;
+  const ids=[];
+  if(r.attendedBy&&r.attendedBy.id) ids.push(r.attendedBy.id);
+  if(r.alcada&&r.alcada.requestedById) ids.push(r.alcada.requestedById);
+  let users=ids.map(function(id){ return DB.users.find(function(u){ return u.id===id; }); }).filter(Boolean);
+  if(!users.length) users=DB.users.filter(function(u){ return u.status==='active'&&u.role==='master'; });
+  const seen={};
+  users.filter(function(u){
+    if(!u.email||u.status!=='active') return false;
+    if(CU&&u.id===CU.id) return false;
+    if(seen[u.email]) return false;
+    seen[u.email]=1; return true;
+  }).forEach(function(u){
+    gasPost({action:'sendStatusEmail',to:u.email,userName:u.name,reqId:r.id,
+      items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+      oldStatus:'—',newStatus:title,reason:reason||'',
+      attendedBy:r.attendedBy?r.attendedBy.name:'',
+      date:new Date().toLocaleDateString('pt-BR')});
+  });
+}
+
+// ── Encerramento: RECUSAR / CANCELAR (solicitação inteira ou 1 item) ──────
+function openCloseModal(reqId,type,idx){
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  const isItem=(idx!==undefined&&idx!==null);
+  if(isItem && !isAdmin()){ toast('Somente a equipe de Compras altera itens.','error'); return; }
+  if(type==='recusada' && !isAdmin()){ toast('Somente a equipe de Compras pode recusar.','error'); return; }
+  if(type==='cancelada' && !isAdmin() && !(CU&&r.userId===CU.id)){ toast('Sem permissão para cancelar.','error'); return; }
+  if(!isItem && r.status>=8){ toast('Esta solicitação já está encerrada.','warning'); return; }
+  _closeCtx={reqId:reqId,type:type,idx:isItem?idx:null};
+  const rec=(type==='recusada');
+  const what=isItem?'item':'solicitação';
+  document.getElementById('closeReqTitle').textContent=(rec?'🚫 Recusar ':'✖ Cancelar ')+what;
+  document.getElementById('closeReqHdr').style.background=rec?'linear-gradient(135deg,#922b21,#c0392b)':'linear-gradient(135deg,#566573,#7f8c8d)';
+  document.getElementById('closeReqInfo').innerHTML='<strong>'+r.id+'</strong> — '+(isItem?esc((r.items[idx]||{}).desc):esc(r.requester))
+    +'<div style="font-size:12px;color:#7a8a99;margin-top:3px;">'+(rec?'O requisitante será avisado por e-mail com o motivo.':(isAdmin()?'O requisitante será avisado por e-mail.':'A equipe de Compras será avisada por e-mail.'))+'</div>';
+  document.getElementById('closeReqReason').value='';
+  document.getElementById('closeReqErr').style.display='none';
+  document.getElementById('closeReqBtn').textContent=rec?'🚫 Confirmar recusa':'✖ Confirmar cancelamento';
+  document.getElementById('closeReqModal').classList.remove('hidden');
+  setTimeout(function(){ const t=document.getElementById('closeReqReason'); if(t) t.focus(); },80);
+}
+function confirmCloseReq(){
+  if(!_closeCtx) return;
+  const reason=(document.getElementById('closeReqReason').value||'').trim();
+  if(reason.length<3){ document.getElementById('closeReqErr').style.display='block'; return; }
+  const ctx=_closeCtx; _closeCtx=null;
+  const r=DB.requests.find(function(x){ return x.id===ctx.reqId; });
+  closeModal('closeReqModal');
+  if(!r) return;
+  if(ctx.idx!==null){
+    const old=r.status;
+    setItemStatus(r,ctx.idx,ctx.type==='recusada'?4:3,reason);
+    saveDB();
+    if(r.status!==old) emailUser(r,old,{reason:reason});
+    toast('Item '+(ctx.type==='recusada'?'recusado':'cancelado')+'.','warning');
+  } else {
+    closeRequest(r,ctx.type,reason);
+  }
+  refreshAll(ctx.reqId);
+}
+function closeRequest(r,type,reason){
+  const old=r.status, now=new Date().toISOString();
+  r.closure={type:type,reason:reason,by:CU.name,byId:CU.id,at:now,prevStatus:old};
+  (r.items||[]).forEach(function(it){
+    const s=it.itemStatus||0;
+    if(s===0||s===5||s===6){
+      it.itemStatus=(type==='recusada')?4:3;
+      it.itemReason=reason; it.closedByReq=true; it.updatedAt=now;
+      if(!Array.isArray(it.history)) it.history=[];
+      it.history.push({at:now,by:CU.name,text:'Item '+(type==='recusada'?'recusado':'cancelado')+' junto com a solicitação — '+reason});
+    }
+  });
+  if(r.alcada && r.alcada.status==='pendente'){ r.alcada.status='cancelada'; r.alcada.obs='Solicitação '+(type==='recusada'?'recusada':'cancelada'); }
+  applyStatus(r,type==='recusada'?ST_RECUSADA:ST_CANCELADA,{reason:reason});
+  saveDB();
+  if(isAdmin()) emailUser(r,old,{reason:reason});
+  else emailStaff(r,'✖ Solicitação cancelada pelo requisitante ('+r.requester+')',reason);
+  toast(r.id+': solicitação '+(type==='recusada'?'recusada':'cancelada')+'.','warning');
+}
+function reopenReq(reqId,target){
+  if(!isAdmin()){ toast('Somente a equipe de Compras pode reabrir.','error'); return; }
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r||r.status<9) return;
+  const ns=(target!==undefined&&target!==null)?target:((r.closure&&r.closure.prevStatus<8)?r.closure.prevStatus:1);
+  const old=r.status, now=new Date().toISOString();
+  (r.items||[]).forEach(function(it){
+    if(it.closedByReq){
+      it.itemStatus=0; it.itemReason=''; delete it.closedByReq; it.updatedAt=now;
+      if(!Array.isArray(it.history)) it.history=[];
+      it.history.push({at:now,by:CU.name,text:'Item reaberto junto com a solicitação'});
+    }
+  });
+  if(r.alcada && r.alcada.status==='cancelada') r.alcada.status='pendente';
+  r.closure=null;
+  applyStatus(r,ns,{reason:'Solicitação reaberta'});
+  saveDB(); emailUser(r,old);
+  toast(reqId+': solicitação reaberta.','success'); refreshAll(reqId);
+}
+
+// ── ITENS ─────────────────────────────────────────────────────────────────
+function recomputeValue(r){
+  if((r.items||[]).some(function(i){ return (i.valorUnit||0)>0; })) r.value=reqItemsTotal(r);
+}
+function recomputeReqFromItems(r){
+  if(r.status>=9) return;
+  const its=r.items||[]; if(!its.length) return;
+  const st=its.map(function(i){ return i.itemStatus||0; });
+  const active=st.filter(function(s){ return s!==3&&s!==4; });
+  if(!active.length){
+    const allRef=st.every(function(s){ return s===4; });
+    const reason='Todos os itens foram '+(allRef?'recusados':'cancelados');
+    r.closure={type:allRef?'recusada':'cancelada',reason:reason,by:CU?CU.name:'Sistema',byId:CU?CU.id:null,at:new Date().toISOString(),prevStatus:r.status,auto:true};
+    applyStatus(r,allRef?ST_RECUSADA:ST_CANCELADA,{reason:reason});
+    return;
+  }
+  const allDone=active.every(function(s){ return s===2; });
+  const anyRecv=active.some(function(s){ return s===1||s===2; });
+  if(allDone){ if(r.status!==8) applyStatus(r,8,{reason:'Todos os itens recebidos'}); }
+  else if(anyRecv){ if(r.status!==7) applyStatus(r,7,{reason:'Recebimento parcial'}); }
+  else if(r.status>=7){ applyStatus(r,6,{reason:'Itens voltaram a pendente'}); }
+}
+function setItemStatus(r,idx,ns,reason){
+  const it=(r.items||[])[idx]; if(!it) return false;
+  const old=it.itemStatus||0; if(old===ns) return false;
+  const now=new Date().toISOString();
+  it.itemStatus=ns; it.updatedAt=now;
+  it.itemReason=(ns===3||ns===4)?(reason||''):'';
+  delete it.closedByReq;
+  if(ns===2 && (it.qtdRecebida||0)<(it.qty||0)) it.qtdRecebida=it.qty;
+  if(!Array.isArray(it.history)) it.history=[];
+  const txt=ITEM_STATUS_LABELS[old]+' → '+ITEM_STATUS_LABELS[ns]+(reason?' — '+reason:'');
+  it.history.push({at:now,by:CU?CU.name:'Sistema',text:txt});
+  touchReq(r,'item','Item "'+it.desc+'": '+txt);
+  recomputeValue(r);
+  recomputeReqFromItems(r);
+  return true;
+}
+function setItemField(r,idx,field,value){
+  const it=(r.items||[])[idx]; if(!it) return false;
+  const old=it[field]||0; if(old===value) return false;
+  const now=new Date().toISOString();
+  it[field]=value; it.updatedAt=now;
+  const lbl=field==='qtdRecebida'?'Qtd recebida':'Valor unitário';
+  if(!Array.isArray(it.history)) it.history=[];
+  it.history.push({at:now,by:CU?CU.name:'Sistema',text:lbl+': '+old+' → '+value});
+  touchReq(r,'item','Item "'+it.desc+'": '+lbl+' '+old+' → '+value);
+  if(field==='valorUnit') recomputeValue(r);
+  if(field==='qtdRecebida'){
+    const st=it.itemStatus||0;
+    if(st!==3&&st!==4){
+      if(value>=(it.qty||0) && st!==2) setItemStatus(r,idx,2);
+      else if(value>0 && value<(it.qty||0) && (st===0||st===5||st===6)) setItemStatus(r,idx,1);
+    }
+  }
+  return true;
+}
+function updateItemField(reqId,idx,field,value){
+  if(!isAdmin()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  const old=r.status;
+  if(setItemField(r,idx,field,value)){
+    saveDB();
+    if(r.status!==old) emailUser(r,old);
+    refreshAll(reqId);
+  }
+}
+function updateItemStatus(reqId,idx,ns){
+  if(!isAdmin()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  if(ns===3||ns===4){ refreshAll(reqId); openCloseModal(reqId,ns===4?'recusada':'cancelada',idx); return; }
+  const old=r.status;
+  if(setItemStatus(r,idx,ns)){
+    saveDB();
+    if(r.status!==old) emailUser(r,old);
+    refreshAll(reqId);
+  }
+}
+function saveItemsUpdate(reqId){
+  saveDB(); toast('✅ Itens atualizados com sucesso!','success'); showDetail(reqId);
+}
+function itemHistoryHtml(it){
+  const h=(it.history||[]).slice().reverse();
+  if(!h.length) return '';
+  return '<details style="margin-top:4px;"><summary style="cursor:pointer;font-size:10.5px;color:#5a7a60;font-weight:800;">histórico ('+h.length+')</summary>'
+    +'<div style="font-size:10.5px;color:#5a7a60;max-height:110px;overflow-y:auto;">'
+    +h.slice(0,12).map(function(x){ return '<div style="padding:2px 0;border-bottom:1px solid #eaf0ea;">'+fmtDT(x.at)+' • '+esc(x.by)+': '+esc(x.text)+'</div>'; }).join('')
+    +'</div></details>';
+}
+
+// ── Tela de GERENCIAMENTO POR ITEM (equipe) ───────────────────────────────
+function fillAttendantSelect(id){
+  const el=document.getElementById(id); if(!el) return;
+  const cur=el.value;
+  const staff=DB.users.filter(function(u){ return u.role==='master'||u.role==='admin'; });
+  el.innerHTML='<option value="">Todos os atendentes</option><option value="none">Sem atendente</option>'
+    +staff.map(function(u){ return '<option value="'+u.id+'">'+esc(u.name)+'</option>'; }).join('');
+  el.value=cur;
+}
+function buildItemFilters(){
+  const fs=document.getElementById('fiStatus');
+  if(fs && fs.options.length<=1){
+    fs.innerHTML='<option value="">Todos os status do item</option>'
+      +ITEM_ORDER.map(function(i){ return '<option value="'+i+'">'+ITEM_STATUS_LABELS[i]+'</option>'; }).join('');
+  }
+  const fc=document.getElementById('fiCat');
+  if(fc){
+    const cur=fc.value;
+    fc.innerHTML='<option value="">Todas as categorias</option>'+DB.categories.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join('');
+    fc.value=cur;
+  }
+  fillAttendantSelect('fiAtend');
+}
+function renderAdminItems(){
+  const el=document.getElementById('adminItemList'); if(!el) return;
+  const g=function(id){ const e=document.getElementById(id); return e?e.value:''; };
+  const chk=function(id){ const e=document.getElementById(id); return !!(e&&e.checked); };
+  const q=g('fiSearch').trim().toLowerCase(), fs=g('fiStatus'), fc=g('fiCat'), fa=g('fiAtend');
+  const onlyStale=chk('fiStale'), hide=chk('fiHide');
+  const canEdit=isAdmin();
+  let rows=[];
+  DB.requests.forEach(function(r){ (r.items||[]).forEach(function(it,i){ rows.push({r:r,it:it,i:i}); }); });
+  rows=rows.filter(function(x){
+    if(hide && x.r.status>=8) return false;
+    if(fc && x.it.cat!==fc) return false;
+    if(!attendMatches(x.r,fa)) return false;
+    const st=x.it.itemStatus||0;
+    if(onlyStale && !(isStale(x.r) && st!==2 && st!==3 && st!==4)) return false;
+    if(q){
+      const hay=(x.r.id+' '+x.r.requester+' '+x.it.desc+' '+(x.it.cat||'')).toLowerCase();
+      if(hay.indexOf(q)<0) return false;
+    }
+    return true;
+  });
+  const counts={};
+  rows.forEach(function(x){ const s=x.it.itemStatus||0; counts[s]=(counts[s]||0)+1; });
+  document.getElementById('itemSummary').innerHTML=ITEM_ORDER.map(function(s){
+    return '<span class="item-status-badge '+ITEM_STATUS_CSS[s]+'" style="font-size:12px;padding:5px 11px;">'+ITEM_STATUS_ICONS[s]+' '+ITEM_STATUS_LABELS[s]+': '+(counts[s]||0)+'</span>';
+  }).join('');
+  if(fs!=='') rows=rows.filter(function(x){ return String(x.it.itemStatus||0)===fs; });
+  rows.sort(function(a,b){ return (new Date(b.r.createdAt||b.r.date)-new Date(a.r.createdAt||a.r.date)) || (a.i-b.i); });
+  const total=rows.length; rows=rows.slice(0,300);
+  if(!rows.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhum item encontrado.</div>'; return; }
+  const body=rows.map(function(x){
+    const r=x.r, it=x.it, i=x.i;
+    const st=it.itemStatus||0, closedItem=(st===3||st===4);
+    const dis=(!canEdit||r.status>=9)?' disabled':'';
+    const tot=(it.valorUnit||0)*(it.qty||1);
+    const upd=it.updatedAt||r.updatedAt||r.createdAt||r.date;
+    const stale=isStale(r)&&st!==2&&!closedItem;
+    return '<tr style="'+(closedItem?'opacity:.72;':'')+'">'
+      +'<td><strong>'+r.id+'</strong><div style="font-size:11px;color:#7a9a80;">'+esc(r.requester)+'</div>'
+        +'<div style="margin-top:3px;">'+statusBadge(r.status)+'</div>'
+        +(r.attendedBy?'<div style="font-size:10.5px;color:#5a7a60;margin-top:2px;">👤 '+esc(r.attendedBy.name)+'</div>':'')+'</td>'
+      +'<td><div style="font-weight:800;">'+esc(it.desc)+'</div><div style="font-size:11px;color:#7a9a80;">'+esc(it.cat||'—')+'</div>'
+        +(it.itemReason?'<div style="font-size:11px;color:#9b1c1a;font-style:italic;">Motivo: '+esc(it.itemReason)+'</div>':'')
+        +itemHistoryHtml(it)+'</td>'
+      +'<td style="text-align:center;font-weight:800;">'+it.qty+'</td>'
+      +'<td style="width:80px;"><input type="number" min="0" value="'+(it.qtdRecebida||0)+'"'+dis
+        +' onchange="updateItemField(\''+r.id+'\','+i+',\'qtdRecebida\',Math.max(0,parseInt(this.value)||0))"></td>'
+      +'<td style="width:105px;"><input type="number" min="0" step="0.01" value="'+(it.valorUnit||'')+'" placeholder="0,00"'+dis
+        +' onchange="updateItemField(\''+r.id+'\','+i+',\'valorUnit\',parseFloat(this.value)||0)"></td>'
+      +'<td style="text-align:right;font-weight:800;white-space:nowrap;">R$ '+tot.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'
+      +'<td style="min-width:150px;">'+itemStatusBadge(st)
+        +'<select class="ssel" style="margin-top:5px;width:100%;"'+dis+' onchange="updateItemStatus(\''+r.id+'\','+i+',parseInt(this.value))">'
+        +ITEM_ORDER.map(function(s){ return '<option value="'+s+'"'+(s===st?' selected':'')+'>'+ITEM_STATUS_LABELS[s]+'</option>'; }).join('')
+        +'</select></td>'
+      +'<td style="font-size:11.5px;white-space:nowrap;">'+fmtDT(upd)
+        +(stale?'<div style="color:#b7791f;font-weight:800;">⚠ parada +'+STALE_DAYS+'d</div>':'')+'</td>'
+      +'<td><button class="btn btn-outline btn-sm" onclick="showDetail(\''+r.id+'\')">Detalhes</button>'
+        +((canEdit&&!closedItem&&r.status<8)
+          ?'<div style="margin-top:5px;display:flex;gap:4px;">'
+            +'<button class="btn btn-danger btn-sm" style="padding:4px 9px;" title="Recusar item" onclick="openCloseModal(\''+r.id+'\',\'recusada\','+i+')">🚫</button>'
+            +'<button class="btn btn-outline btn-sm" style="padding:4px 9px;" title="Cancelar item" onclick="openCloseModal(\''+r.id+'\',\'cancelada\','+i+')">✖</button></div>'
+          :'')
+      +'</td></tr>';
+  }).join('');
+  el.innerHTML='<div class="card" style="padding:14px;overflow-x:auto;"><table class="itable" style="min-width:980px;"><thead><tr>'
+    +'<th>Solicitação</th><th>Item</th><th>Qtd</th><th>Recebida</th><th>Valor Unit.</th><th>Total</th><th>Status do Item</th><th>Atualizado</th><th></th>'
+    +'</tr></thead><tbody>'+body+'</tbody></table>'
+    +(total>rows.length?'<div style="font-size:12px;color:#7a9a80;margin-top:8px;">Mostrando '+rows.length+' de '+total+' itens — refine os filtros para ver os demais.</div>':'')
+    +'</div>';
+}
+
+// ── APROVAÇÕES DE ALÇADA (visão do aprovador) ─────────────────────────────
+function renderAprovacoes(){
+  const el=document.getElementById('aprovacoesList'); if(!el||!CU) return;
+  const pend=pendingAlcadasForMe();
+  const done=DB.requests.filter(function(r){
+    const a=r.alcada;
+    return a && (a.status==='aprovada'||a.status==='rejeitada') && (String(a.approverId)===String(CU.id)||a.approvedBy===CU.name);
+  }).slice(-20).reverse();
+  let html='<div style="font-weight:900;font-size:14px;margin-bottom:10px;font-family:\'Montserrat\',sans-serif;">⏳ Aguardando minha decisão ('+pend.length+')</div>';
+  if(!pend.length) html+='<div class="card" style="text-align:center;padding:28px;color:#7a9a80;margin-bottom:18px;">Nenhuma aprovação pendente. ✅</div>';
+  html+=pend.map(function(r){
+    const w=(r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
+    return '<div class="req-card urgent" style="border-left-color:#d4ac0d;">'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"><strong>'+r.id+'</strong>'+urgBadge(r.type)+statusBadge(r.status)+'</div>'
+      +'<div style="font-size:13.5px;font-weight:700;">'+r.items.map(function(i){ return esc(i.desc)+' ×'+i.qty; }).join(', ')+'</div>'
+      +'<div style="font-size:12px;color:#7a8a99;margin:4px 0;">'+esc(r.requester)+' • '+esc(reqSector(r))+' • enviada em '+esc(r.alcada.requestedAt||'—')+(r.alcada.requestedByName?' por '+esc(r.alcada.requestedByName):'')+'</div>'
+      +(w?'<div style="font-size:12.5px;color:#1a5530;font-weight:700;">🏆 '+esc(w.name)+' — R$ '+(w.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>':'')
+      +'<div style="margin-top:10px;"><button class="btn btn-yellow btn-sm" onclick="showDetail(\''+r.id+'\')">🔐 Analisar e decidir</button></div></div>';
+  }).join('');
+  if(done.length){
+    html+='<div style="font-weight:900;font-size:14px;margin:22px 0 10px;font-family:\'Montserrat\',sans-serif;">📜 Decididas por mim</div>';
+    html+=done.map(function(r){
+      const ok=r.alcada.status==='aprovada';
+      return '<div class="hist-item '+(ok?'approved':'rejected')+'"><div style="flex:1;"><strong>'+r.id+'</strong> — '+esc(r.requester)
+        +'<div style="font-size:11.5px;color:#7a8a99;">'+esc(r.alcada.approvedAt||'')+(r.alcada.obs?' • '+esc(r.alcada.obs):'')+'</div></div>'
+        +'<span class="badge '+(ok?'badge-green':'badge-red')+'">'+(ok?'Aprovada':'Rejeitada')+'</span>'
+        +'<button class="btn btn-outline btn-sm" onclick="showDetail(\''+r.id+'\')">Ver</button></div>';
+    }).join('');
+  }
+  el.innerHTML=html;
+}
+
+// ── Peças de UI do modal de detalhes ──────────────────────────────────────
+function timingBar(r){
+  const stale=isStale(r), closed=r.status>=8;
+  return '<div style="display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 2px;font-size:12px;color:rgba(255,255,255,.7);">'
+    +'<span>⏱ '+(closed?'Tempo de atendimento: ':'Em atendimento há ')+'<strong>'+ageLabel(r)+'</strong></span>'
+    +'<span>🕒 '+(closed?'Encerrada em ':'Última atualização há ')+'<strong style="'+(stale?'color:#f1c40f;':'')+'">'
+      +(closed?fmtDT(r.finishedAt||r.updatedAt):sinceUpdateLabel(r))+'</strong>'+(stale?' ⚠ parada':'')+'</span></div>';
+}
+function closureBanner(r){
+  if(r.status<9) return '';
+  const c=r.closure||{}, rec=(r.status===9);
+  return '<div style="margin:12px 0;background:'+(rec?'#fff5f5':'#f4f6f8')+';border:2px solid '+(rec?'#e08080':'#b8c4cc')+';border-radius:10px;padding:13px 15px;color:#2c3e30;">'
+    +'<div style="font-weight:900;font-size:13.5px;color:'+(rec?'#9b1c1a':'#445566')+';">'+(rec?'🚫 Solicitação Recusada':'✖ Solicitação Cancelada')+'</div>'
+    +(c.reason?'<div style="font-size:13px;margin-top:6px;"><strong>Motivo:</strong> '+esc(c.reason)+'</div>':'')
+    +'<div style="font-size:11.5px;color:#7a8a99;margin-top:5px;">'+(c.by?'Por '+esc(c.by)+' • ':'')+fmtDT(c.at||r.finishedAt||r.updatedAt)+'</div>'
+    +(isAdmin()?'<button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="reopenReq(\''+r.id+'\')">↩ Reabrir solicitação</button>':'')
+    +'</div>';
+}
+function detailActions(r){
+  const own=CU&&r.userId===CU.id;
+  let h='';
+  if(isAdmin()){
+    const staff=DB.users.filter(function(u){ return u.status==='active'&&(u.role==='master'||u.role==='admin'); });
+    h+='<div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:5px;">Atualizar Status</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+      +'<select class="fc" id="dtStatus" style="max-width:240px;">'+DB.statusLabels.map(function(l,i){ return '<option value="'+i+'"'+(i===r.status?' selected':'')+'>'+l+'</option>'; }).join('')+'</select>'
+      +'<input class="fc" id="dtValue" type="number" min="0" step="0.01" placeholder="Valor R$" value="'+(r.value||'')+'" style="max-width:130px;">'
+      +'<button class="btn btn-green btn-sm" onclick="adminUpdate(\''+r.id+'\')">Salvar</button></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;"><span style="font-size:12px;font-weight:800;color:rgba(255,255,255,.6);">👤 Atendente:</span>'
+      +'<select class="fc" style="max-width:230px;" onchange="assignAttendant(\''+r.id+'\',this.value)"><option value="">— Sem atendente —</option>'
+      +staff.map(function(u){ return '<option value="'+u.id+'"'+(attendedIs(r,u.id)?' selected':'')+'>'+esc(u.name)+'</option>'; }).join('')+'</select></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
+    if(r.status<8){
+      if(isMaster()) h+='<button class="btn btn-yellow btn-sm" onclick="openApproverModal(\''+r.id+'\')">📤 Enviar para Alçada</button>';
+      h+='<button class="btn btn-danger btn-sm" onclick="openCloseModal(\''+r.id+'\',\'recusada\')">🚫 Recusar</button>'
+        +'<button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,.35);" onclick="openCloseModal(\''+r.id+'\',\'cancelada\')">✖ Cancelar</button>';
+    }
+    h+='<button class="btn btn-danger btn-sm" style="margin-left:auto;" onclick="deleteReq(\''+r.id+'\')">🗑 Excluir</button></div></div>';
+  } else if(own && r.status<8){
+    h+='<div style="margin-top:14px;"><button class="btn btn-danger btn-sm" onclick="openCloseModal(\''+r.id+'\',\'cancelada\')">✖ Cancelar minha solicitação</button></div>';
+  }
+  return h;
+}
+const ACT_ICONS={criada:'🆕',status:'🔄',chat:'💬',item:'📦',valor:'💲',alcada:'🔐',orcamento:'📎',saving:'💰',atendente:'👤'};
+function renderActivity(r){
+  const list=(r.activity||[]).slice().reverse();
+  return '<details style="margin-top:14px;background:#f5f8f5;border:1.5px solid #dce8de;border-radius:10px;padding:10px 14px;color:#2c3e30;">'
+    +'<summary style="cursor:pointer;font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;">🕒 Histórico de atividades ('+list.length+')</summary>'
+    +(list.length
+      ?'<div style="margin-top:10px;max-height:240px;overflow-y:auto;">'+list.map(function(a){
+          return '<div style="display:flex;gap:9px;padding:6px 0;border-bottom:1px solid #e6eee8;font-size:12.5px;"><span>'+(ACT_ICONS[a.type]||'•')+'</span>'
+            +'<div style="flex:1"><div style="font-weight:700;">'+esc(a.text)+'</div><div style="font-size:11px;color:#7a9a80;">'+fmtDT(a.at)+' • '+esc(a.by)+'</div></div></div>';
+        }).join('')+'</div>'
+      :'<div style="margin-top:8px;font-size:12.5px;color:#7a9a80;">Sem atividades registradas ainda.</div>')
+    +'</details>';
+}
+
+// ── Link direto do e-mail (?req=SOL-001) ──────────────────────────────────
+function openDeepLink(){
+  try{
+    const q=new URLSearchParams(location.search).get('req');
+    if(!q) return;
+    history.replaceState(null,'',location.pathname);
+    setTimeout(function(){ if(DB.requests.find(function(r){ return r.id===q; })) showDetail(q); },900);
+  }catch(e){}
+}
+
+// ── Dashboard: atendimentos por responsável ───────────────────────────────
+function renderAttendantChart(all){
+  const el=document.getElementById('byAttendantChart'); if(!el) return;
+  const m={};
+  all.forEach(function(r){
+    const n=(r.attendedBy&&r.attendedBy.name)?r.attendedBy.name:'Sem atendente';
+    if(!m[n]) m[n]={total:0,open:0,fin:0,closed:0,ms:0};
+    const o=m[n]; o.total++;
+    if(r.status<8) o.open++;
+    else if(r.status===8){ o.fin++; o.ms+=(new Date(r.finishedAt||r.updatedAt)-new Date(r.createdAt||r.date))||0; }
+    else o.closed++;
+  });
+  const ent=Object.keys(m).map(function(k){ return [k,m[k]]; }).sort(function(a,b){ return b[1].total-a[1].total; });
+  if(!ent.length){ el.innerHTML='<div style="color:#7a9a80;font-size:13px;">Sem dados.</div>'; return; }
+  const mx=Math.max.apply(null,ent.map(function(e){ return e[1].total; }).concat([1]));
+  el.innerHTML=ent.map(function(e){
+    const o=e[1];
+    return '<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:800;color:#2c3e30;margin-bottom:3px;"><span>'+esc(e[0])+'</span><span>'+o.total+'</span></div>'
+      +'<div style="background:#e8f0ea;border-radius:5px;height:16px;overflow:hidden;"><div style="width:'+Math.round(o.total/mx*100)+'%;background:linear-gradient(90deg,var(--green-md),var(--green));height:100%;border-radius:5px;min-width:4px;"></div></div>'
+      +'<div style="font-size:10.5px;color:#6b8570;margin-top:3px;">'+o.open+' em aberto • '+o.fin+' finalizada(s)'+(o.fin?' (média '+fmtDur(o.ms/o.fin)+')':'')+' • '+o.closed+' recusada(s)/cancelada(s)</div></div>';
+  }).join('');
+}
+
 // ── BOOT ──
 window.addEventListener('DOMContentLoaded',function(){
   // 1. Carregar dados locais como fallback
   const stored=sessionStorage.getItem('hlr_sol_v1');
   if(stored){ try{ const p=JSON.parse(stored); DB.users=p.users||DB.users; DB.requests=p.requests||DB.requests; DB.categories=p.categories||DB.categories; DB.nextId=p.nextId||DB.nextId; DB.statusLabels=p.statusLabels||DB.statusLabels; }catch(e){} }
+  normalizeDB(DB);
   // 2. Mostrar barra de status e iniciar conexão com GAS
   var gasBar=document.getElementById('gasStatusBar');
   if(gasBar) gasBar.style.display='flex';
