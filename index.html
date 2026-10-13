@@ -573,6 +573,32 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
         <div id="adminReqList"></div>
       </div>
 
+      <!-- RELATÓRIOS -->
+      <div class="section" id="sec-relatorios">
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <div style="font-weight:900;font-size:15px;font-family:'Montserrat',sans-serif;">Relat&oacute;rios</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" onclick="exportReportCSV()">&#11015; Exportar CSV (Excel)</button>
+              <button class="btn btn-outline btn-sm" onclick="printReport()">&#128424; Imprimir / PDF</button>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;">
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Tipo de relat&oacute;rio</label><select class="fc" id="relMode" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"><option value="itens">Itens atendidos</option><option value="requisitante">Por requisitante</option><option value="atendente">Por atendente</option><option value="valor">Por valor</option></select></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Status do item</label><select class="fc" id="relStatus" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"><option value="atendidos">Atendidos (parcial + recebido)</option></select></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">De</label><input class="fc" type="date" id="relFrom" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">At&eacute;</label><input class="fc" type="date" id="relTo" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Requisitante</label><select class="fc" id="relReq" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"><option value="">Todos os requisitantes</option></select></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Atendente</label><select class="fc" id="relAtend" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"><option value="">Todos os atendentes</option></select></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Categoria</label><select class="fc" id="relCat" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"><option value="">Todas as categorias</option></select></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Nota fiscal</label><select class="fc" id="relNF" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" onchange="renderReport()"><option value="">Com ou sem NF</option><option value="com">Somente com NF</option><option value="sem">Somente sem NF</option></select></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Valor m&iacute;n. (R$)</label><input class="fc" type="number" min="0" step="0.01" id="relVMin" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" oninput="renderReport()"></div>
+            <div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Valor m&aacute;x. (R$)</label><input class="fc" type="number" min="0" step="0.01" id="relVMax" style="background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;width:100%;" oninput="renderReport()"></div>
+          </div>
+        </div>
+        <div id="relResult"></div>
+      </div>
+
       <!-- ADMIN ITENS -->
       <div class="section" id="sec-admin-itens">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
@@ -694,6 +720,31 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="nfModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="mhdr" style="background:linear-gradient(135deg,#1a3320,#1e4d2a);"><h3>&#129534; Nota fiscal / Atendimento do item</h3></div>
+    <div class="mbody" style="color:#2c3e30;background:#fff;">
+      <div id="nfInfo" style="font-size:13.5px;margin-bottom:12px;"></div>
+      <label style="font-size:12px;font-weight:800;color:#5a7a60;text-transform:uppercase;">N&uacute;mero da nota fiscal *</label>
+      <input id="nfNumber" class="fc" placeholder="Ex.: 123456" style="margin:4px 0 10px;background:#f5f8f5;color:#2c3e30;border:1.5px solid #dce8de;">
+      <label style="font-size:12px;font-weight:800;color:#5a7a60;text-transform:uppercase;">Descri&ccedil;&atilde;o do atendimento</label>
+      <textarea id="nfDesc" class="fc" rows="3" placeholder="Ex.: Material entregue ao setor, conferido com a NF..." style="margin:4px 0 10px;background:#f5f8f5;color:#2c3e30;border:1.5px solid #dce8de;"></textarea>
+      <label style="font-size:12px;font-weight:800;color:#5a7a60;text-transform:uppercase;">PDF da nota fiscal (at&eacute; 5 MB)</label>
+      <div id="nfCurrent" style="font-size:12.5px;margin:4px 0;"></div>
+      <input id="nfFile" type="file" accept="application/pdf,.pdf" style="font-size:12.5px;margin-bottom:12px;max-width:100%;">
+      <div style="background:#f0fbf4;border:1.5px solid #bfe3cb;border-radius:9px;padding:10px 12px;">
+        <label style="font-size:13px;font-weight:700;display:flex;gap:8px;align-items:center;"><input type="checkbox" id="nfSend"> Enviar a nota + descri&ccedil;&atilde;o por e-mail</label>
+        <input id="nfEmailTo" class="fc" type="email" style="margin-top:7px;background:#fff;color:#2c3e30;border:1.5px solid #c8d8cc;">
+      </div>
+      <div id="nfErr" style="display:none;color:var(--red);font-size:12px;font-weight:700;margin-top:8px;"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline btn-sm" onclick="_nfCtx=null;closeModal('nfModal')">Cancelar</button>
+        <button class="btn btn-green btn-sm" id="nfBtn" onclick="saveNF()">&#128190; Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="notifModal">
   <div class="modal" style="max-width:520px;">
     <div class="mhdr green"><h3 id="notifTitle">&#128276; Novidades</h3></div>
@@ -745,6 +796,7 @@ function gasPostXHR(body){
 
 function gasPost(payload){
   if(!GAS_URL) return Promise.resolve({success:false,error:'GAS_URL não configurado'});
+  payload.appUrl=APP_URL;
   var body=JSON.stringify(payload);
   if(typeof fetch!=='undefined'){
     return fetch(GAS_URL,{
@@ -768,6 +820,7 @@ function gasPost(payload){
 }
 // ════════════════════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzNbVzRgNqfNz1_KjFE1kgHrJaHYqOIEg3DGIBYc7iHAEvtInVruEXUgBybV7PSCjnYlg/exec'
+const APP_URL = 'https://comprashlrahvn-droid.github.io/pedidodecompra/';   // link do sistema usado nos e-mails
 
 // ── SEED DATA ──
 const SEED = {
@@ -1219,6 +1272,7 @@ function buildNav(){
       +'<div class="nav-item" onclick="navigate(\'admin-dash\')" data-s="admin-dash"><span class="nav-icon">🏠</span> Dashboard</div>'
       +'<div class="nav-item" onclick="navigate(\'admin-gestao\')" data-s="admin-gestao"><span class="nav-icon">📋</span> Gerenciar Solicitações</div>'
       +'<div class="nav-item" onclick="navigate(\'admin-itens\')" data-s="admin-itens"><span class="nav-icon">📦</span> Gerenciar Itens</div>'
+      +'<div class="nav-item" onclick="navigate(\'relatorios\')" data-s="relatorios"><span class="nav-icon">📊</span> Relatórios</div>'
       +aprov
       +'<div class="nav-item" onclick="navigate(\'admin-cat\')" data-s="admin-cat"><span class="nav-icon">🗂</span> Categorias</div>'
       +(isMaster()?'<div class="nav-item" onclick="navigate(\'admin-users\')" data-s="admin-users"><span class="nav-icon">👥</span> Usuários '+pd+'</div>':'');
@@ -1238,7 +1292,7 @@ function navigate(sec){
   const el=document.getElementById('sec-'+sec); if(el) el.classList.add('active');
   const ni=document.querySelector('[data-s="'+sec+'"]'); if(ni) ni.classList.add('active');
   const titles={dashboard:'Dashboard',nova:'Nova Solicitação',minhas:'Minhas Solicitações',
-    'admin-dash':'Dashboard Administrativo','admin-gestao':'Gerenciar Solicitações','admin-itens':'Gerenciar Itens',
+    'admin-dash':'Dashboard Administrativo','admin-gestao':'Gerenciar Solicitações','admin-itens':'Gerenciar Itens',relatorios:'Relatórios',
     aprovacoes:'Aprovações de Alçada','admin-users':'Gerenciar Usuários','admin-cat':'Categorias'};
   document.getElementById('tbarTitle').textContent=titles[sec]||sec;
   updateNotifBadge();
@@ -1250,6 +1304,7 @@ function navigate(sec){
   if(sec==='admin-dash') renderAdminDash();
   if(sec==='admin-gestao'){ buildStatusFilter(); renderAdminList(); }
   if(sec==='admin-itens'){ buildItemFilters(); renderAdminItems(); }
+  if(sec==='relatorios'){ buildReportFilters(); renderReport(); }
   if(sec==='aprovacoes') renderAprovacoes();
   if(sec==='admin-users') renderUsersPage();
   if(sec==='admin-cat') renderCats();
@@ -1345,6 +1400,7 @@ function showDetail(reqId){
         }).join('')}
       </div>
     </div>`:''}
+    ${renderNFBlock(r)}
     ${detailActions(r)}
     <div style="margin-top:14px;"><div style="font-weight:800;font-size:12px;color:var(--g500);text-transform:uppercase;margin-bottom:7px;">💬 Mensagens</div>
     <div class="chat-box"><div class="chat-msgs" id="chatMsgs">${(r.chat||[]).map(m=>{
@@ -1605,12 +1661,12 @@ function renderMyItems(){
   const all=[];
   reqs.forEach(function(r){ r.items.forEach(function(it){ all.push({it:it,r:r}); }); });
   if(!all.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhum item.</div>'; return; }
-  el.innerHTML='<div class="card" style="overflow-x:auto;"><table class="itable"><thead><tr><th>Req.</th><th>Descrição</th><th>Qtd</th><th>Recebida</th><th>Status do Item</th><th>Solicitação</th><th>Obs.</th></tr></thead><tbody>'
+  el.innerHTML='<div class="card" style="overflow-x:auto;"><table class="itable"><thead><tr><th>Req.</th><th>Descrição</th><th>Qtd</th><th>Recebida</th><th>Status do Item</th><th>Solicitação</th><th>Obs.</th><th>NF</th></tr></thead><tbody>'
     +all.slice().reverse().map(function(x){
       const it=x.it, r=x.r;
       return '<tr><td><strong>'+r.id+'</strong></td><td>'+esc(it.desc)+'<div style="font-size:11px;color:#7a9a80;">'+esc(it.cat||'-')+'</div></td>'
         +'<td>'+it.qty+'</td><td>'+(it.qtdRecebida||0)+'</td><td>'+itemStatusBadge(it.itemStatus)+'</td><td>'+statusBadge(r.status)+'</td>'
-        +'<td style="font-size:12px;color:#9b1c1a;font-style:italic;">'+esc(it.itemReason||'')+'</td></tr>';
+        +'<td style="font-size:12px;color:#9b1c1a;font-style:italic;">'+esc(it.itemReason||'')+'</td><td style="font-size:11.5px;">'+(it.nfNumber?'NF '+esc(it.nfNumber):'—')+'</td></tr>';
     }).join('')+'</tbody></table></div>';
 }
 
@@ -1641,11 +1697,13 @@ function emailUser(req,oldStatus,extra){
   if(!GAS_URL) return;
   extra=extra||{};
   const user=DB.users.find(function(u){ return u.id===req.userId; });
-  if(!user||!user.email) return;
+  if(!user||!user.email){ toast('⚠ Solicitante sem e-mail cadastrado — aviso não enviado.','warning'); return; }
+  const event=extra.event||(req.status===9?'recusada':req.status===10?'cancelada':'status');
   gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:req.id,
     items:(req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
     oldStatus:stLabel(oldStatus),newStatus:stLabel(req.status),
     reason:extra.reason||((req.status>=9&&req.closure)?req.closure.reason:''),
+    event:event,actor:CU?CU.name:'',
     attendedBy:req.attendedBy?req.attendedBy.name:'',
     date:new Date().toLocaleDateString('pt-BR')}
   ).then(function(res){
@@ -1653,6 +1711,22 @@ function emailUser(req,oldStatus,extra){
       console.warn('Falha ao enviar e-mail de status:', res&&res.error);
       toast('⚠ E-mail de notificação não enviado: '+(res&&res.error?res.error:'verifique o GAS'),'error');
     }
+  });
+}
+// Aviso ao solicitante quando UM item é recusado/cancelado (e a solicitação continua aberta)
+function emailItem(r,idx,type,reason){
+  if(!GAS_URL) return;
+  const user=DB.users.find(function(u){ return u.id===r.userId; });
+  if(!user||!user.email){ toast('⚠ Solicitante sem e-mail cadastrado — aviso não enviado.','warning'); return; }
+  const it=(r.items||[])[idx]||{};
+  gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:r.id,
+    items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+    oldStatus:'Item "'+(it.desc||'')+'"',newStatus:'Item '+(type==='recusada'?'recusado':'cancelado'),
+    reason:reason,event:'item',actor:CU?CU.name:'',
+    attendedBy:r.attendedBy?r.attendedBy.name:'',
+    date:new Date().toLocaleDateString('pt-BR')}
+  ).then(function(res){
+    if(!res || !res.success) toast('⚠ E-mail ao solicitante não enviado: '+(res&&res.error?res.error:'verifique o GAS'),'error');
   });
 }
 function adminUpdate(reqId){
@@ -3060,6 +3134,7 @@ function refreshAll(reqId){
   if(act('admin-dash'))   renderAdminDash();
   if(act('minhas'))     { renderMySols(); renderMyItems(); }
   if(act('aprovacoes'))   renderAprovacoes();
+  if(act('relatorios'))   renderReport();
   if(act('dashboard'))    renderUserDash();
   updateNotifBadge();
 }
@@ -3121,6 +3196,7 @@ function confirmCloseReq(){
     setItemStatus(r,ctx.idx,ctx.type==='recusada'?4:3,reason);
     saveDB();
     if(r.status!==old) emailUser(r,old,{reason:reason});
+    else emailItem(r,ctx.idx,ctx.type,reason);
     toast('Item '+(ctx.type==='recusada'?'recusado':'cancelado')+'.','warning');
   } else {
     closeRequest(r,ctx.type,reason);
@@ -3142,7 +3218,7 @@ function closeRequest(r,type,reason){
   if(r.alcada && r.alcada.status==='pendente'){ r.alcada.status='cancelada'; r.alcada.obs='Solicitação '+(type==='recusada'?'recusada':'cancelada'); }
   applyStatus(r,type==='recusada'?ST_RECUSADA:ST_CANCELADA,{reason:reason});
   saveDB();
-  if(isAdmin()) emailUser(r,old,{reason:reason});
+  if(isAdmin()) emailUser(r,old,{reason:reason,event:type});
   else emailStaff(r,'✖ Solicitação cancelada pelo requisitante ('+r.requester+')',reason);
   toast(r.id+': solicitação '+(type==='recusada'?'recusada':'cancelada')+'.','warning');
 }
@@ -3192,6 +3268,7 @@ function setItemStatus(r,idx,ns,reason){
   const old=it.itemStatus||0; if(old===ns) return false;
   const now=new Date().toISOString();
   it.itemStatus=ns; it.updatedAt=now;
+  if((ns===1||ns===2)&&!it.receivedAt) it.receivedAt=now;
   it.itemReason=(ns===3||ns===4)?(reason||''):'';
   delete it.closedByReq;
   if(ns===2 && (it.qtdRecebida||0)<(it.qty||0)) it.qtdRecebida=it.qty;
@@ -3208,6 +3285,7 @@ function setItemField(r,idx,field,value){
   const old=it[field]||0; if(old===value) return false;
   const now=new Date().toISOString();
   it[field]=value; it.updatedAt=now;
+  if(field==='qtdRecebida'&&value>0&&!it.receivedAt) it.receivedAt=now;
   const lbl=field==='qtdRecebida'?'Qtd recebida':'Valor unitário';
   if(!Array.isArray(it.history)) it.history=[];
   it.history.push({at:now,by:CU?CU.name:'Sistema',text:lbl+': '+old+' → '+value});
@@ -3328,6 +3406,7 @@ function renderAdminItems(){
       +'<td style="width:105px;"><input type="number" min="0" step="0.01" value="'+(it.valorUnit||'')+'" placeholder="0,00"'+dis
         +' onchange="updateItemField(\''+r.id+'\','+i+',\'valorUnit\',parseFloat(this.value)||0)"></td>'
       +'<td style="text-align:right;font-weight:800;white-space:nowrap;">R$ '+tot.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'
+      +'<td style="font-size:11.5px;min-width:95px;">'+nfCell(it,true)+'</td>'
       +'<td style="min-width:150px;">'+itemStatusBadge(st)
         +'<select class="ssel" style="margin-top:5px;width:100%;"'+dis+' onchange="updateItemStatus(\''+r.id+'\','+i+',parseInt(this.value))">'
         +ITEM_ORDER.map(function(s){ return '<option value="'+s+'"'+(s===st?' selected':'')+'>'+ITEM_STATUS_LABELS[s]+'</option>'; }).join('')
@@ -3335,6 +3414,7 @@ function renderAdminItems(){
       +'<td style="font-size:11.5px;white-space:nowrap;">'+fmtDT(upd)
         +(stale?'<div style="color:#b7791f;font-weight:800;">⚠ parada +'+STALE_DAYS+'d</div>':'')+'</td>'
       +'<td><button class="btn btn-outline btn-sm" onclick="showDetail(\''+r.id+'\')">Detalhes</button>'
+        +((canEdit&&!closedItem&&r.status<9)?'<div style="margin-top:5px;"><button class="btn btn-outline btn-sm" style="padding:4px 8px;" onclick="openNFModal(\''+r.id+'\','+i+')">🧾 NF</button></div>':'')
         +((canEdit&&!closedItem&&r.status<8)
           ?'<div style="margin-top:5px;display:flex;gap:4px;">'
             +'<button class="btn btn-danger btn-sm" style="padding:4px 9px;" title="Recusar item" onclick="openCloseModal(\''+r.id+'\',\'recusada\','+i+')">🚫</button>'
@@ -3342,8 +3422,8 @@ function renderAdminItems(){
           :'')
       +'</td></tr>';
   }).join('');
-  el.innerHTML='<div class="card" style="padding:14px;overflow-x:auto;"><table class="itable" style="min-width:980px;"><thead><tr>'
-    +'<th>Solicitação</th><th>Item</th><th>Qtd</th><th>Recebida</th><th>Valor Unit.</th><th>Total</th><th>Status do Item</th><th>Atualizado</th><th></th>'
+  el.innerHTML='<div class="card" style="padding:14px;overflow-x:auto;"><table class="itable" style="min-width:1090px;"><thead><tr>'
+    +'<th>Solicitação</th><th>Item</th><th>Qtd</th><th>Recebida</th><th>Valor Unit.</th><th>Total</th><th>NF</th><th>Status do Item</th><th>Atualizado</th><th></th>'
     +'</tr></thead><tbody>'+body+'</tbody></table>'
     +(total>rows.length?'<div style="font-size:12px;color:#7a9a80;margin-top:8px;">Mostrando '+rows.length+' de '+total+' itens — refine os filtros para ver os demais.</div>':'')
     +'</div>';
@@ -3469,6 +3549,361 @@ function renderAttendantChart(all){
       +'<div style="background:#e8f0ea;border-radius:5px;height:16px;overflow:hidden;"><div style="width:'+Math.round(o.total/mx*100)+'%;background:linear-gradient(90deg,var(--green-md),var(--green));height:100%;border-radius:5px;min-width:4px;"></div></div>'
       +'<div style="font-size:10.5px;color:#6b8570;margin-top:3px;">'+o.open+' em aberto • '+o.fin+' finalizada(s)'+(o.fin?' (média '+fmtDur(o.ms/o.fin)+')':'')+' • '+o.closed+' recusada(s)/cancelada(s)</div></div>';
   }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  v3 — NOTA FISCAL POR ITEM (PDF no Drive + e-mail) · RELATÓRIOS
+// ═══════════════════════════════════════════════════════════════════════════
+const NF_EMAIL_DEFAULT = 'auxmanutencaohlr.ahvn@gmail.com';
+const NF_MAX_BYTES = 5*1024*1024;
+let _nfCtx = null;
+
+function readFileB64(file){
+  return new Promise(function(resolve,reject){
+    const fr=new FileReader();
+    fr.onload=function(){ resolve(String(fr.result).split(',')[1]); };
+    fr.onerror=function(){ reject(new Error('Falha ao ler o arquivo.')); };
+    fr.readAsDataURL(file);
+  });
+}
+function brl(v){ return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// Célula resumida da NF (tabelas)
+function nfCell(it,withLink){
+  if(!it.nfNumber && !it.nfFile) return '<span style="color:#9ab;">—</span>';
+  return '<strong>NF '+esc(it.nfNumber||'s/n')+'</strong>'
+    +((it.nfFile&&it.nfFile.url&&withLink)
+        ? ' <a href="'+esc(it.nfFile.url)+'" target="_blank" rel="noopener" title="Abrir PDF da nota">📎</a>'
+        : (it.nfFile?' 📎':''))
+    +(it.nfSentAt?'<div style="font-size:10.5px;color:#1e8c3a;">📧 enviada '+fmtDT(it.nfSentAt)+'</div>':'');
+}
+
+// Bloco no detalhe da solicitação
+function renderNFBlock(r){
+  const staff=isAdmin(), link=isAdmin()||isDirecao();
+  const list=(r.items||[]).map(function(it,i){ return {it:it,i:i}; }).filter(function(x){
+    const st=x.it.itemStatus||0;
+    return x.it.nfNumber||x.it.nfFile||x.it.atendimentoDesc||(staff&&r.status<9&&st!==3&&st!==4);
+  });
+  if(!list.length) return '';
+  return '<div style="margin-top:14px;background:#f5f8f5;border:1.5px solid #dce8de;border-radius:10px;padding:12px 14px;color:#2c3e30;">'
+    +'<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;margin-bottom:8px;">🧾 Atendimento por item / Nota fiscal</div>'
+    +list.map(function(x){
+      const it=x.it;
+      return '<div style="padding:9px 0;border-bottom:1px solid #e6eee8;">'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><strong style="font-size:13px;">'+esc(it.desc)+'</strong>'+itemStatusBadge(it.itemStatus)+'<span style="margin-left:auto;font-size:12px;">'+nfCell(it,link)+'</span></div>'
+        +(it.atendimentoDesc?'<div style="font-size:12.5px;margin-top:5px;color:#445566;"><strong>Atendimento:</strong> '+esc(it.atendimentoDesc)+'</div>':'')
+        +(staff&&r.status<9?'<div style="margin-top:7px;display:flex;gap:7px;flex-wrap:wrap;">'
+          +'<button class="btn btn-outline btn-sm" onclick="openNFModal(\''+r.id+'\','+x.i+')">🧾 '+(it.nfNumber?'Editar NF / atendimento':'Registrar NF / atendimento')+'</button>'
+          +((it.nfNumber&&it.nfFile)?'<button class="btn btn-outline btn-sm" onclick="sendNFNow(\''+r.id+'\','+x.i+')">📧 '+(it.nfSentAt?'Reenviar nota':'Enviar nota')+'</button>':'')
+          +'</div>':'')
+        +'</div>';
+    }).join('')
+    +'</div>';
+}
+
+function openNFModal(reqId,idx){
+  if(!isAdmin()){ toast('Somente a equipe de Compras registra notas fiscais.','error'); return; }
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  const it=(r.items||[])[idx]; if(!it) return;
+  _nfCtx={reqId:reqId,idx:idx};
+  document.getElementById('nfInfo').innerHTML='<strong>'+r.id+'</strong> — '+esc(it.desc)+' <span style="color:#7a8a99;">(qtd '+it.qty+' • atendida '+(it.qtdRecebida||0)+')</span>';
+  document.getElementById('nfNumber').value=it.nfNumber||'';
+  document.getElementById('nfDesc').value=it.atendimentoDesc||'';
+  document.getElementById('nfFile').value='';
+  document.getElementById('nfEmailTo').value=it.nfSentTo||NF_EMAIL_DEFAULT;
+  document.getElementById('nfSend').checked=!it.nfSentAt;
+  document.getElementById('nfErr').style.display='none';
+  document.getElementById('nfCurrent').innerHTML=it.nfFile
+    ? '📎 PDF atual: <strong>'+esc(it.nfFile.name||'nota.pdf')+'</strong> <label style="margin-left:8px;font-size:12px;"><input type="checkbox" id="nfRemove"> remover</label>'
+    : '<span style="color:#7a8a99;">Nenhum PDF anexado ainda.</span>';
+  document.getElementById('nfBtn').disabled=false;
+  document.getElementById('nfBtn').textContent='💾 Salvar';
+  document.getElementById('nfModal').classList.remove('hidden');
+}
+
+async function saveNF(){
+  const ctx=_nfCtx; if(!ctx) return;
+  const r=DB.requests.find(function(x){ return x.id===ctx.reqId; }); if(!r) return;
+  const it=r.items[ctx.idx]; if(!it) return;
+  const num=(document.getElementById('nfNumber').value||'').trim();
+  const desc=(document.getElementById('nfDesc').value||'').trim();
+  const to=(document.getElementById('nfEmailTo').value||'').trim();
+  const send=document.getElementById('nfSend').checked;
+  const rmEl=document.getElementById('nfRemove'); const remove=!!(rmEl&&rmEl.checked);
+  const fileEl=document.getElementById('nfFile'); const file=fileEl.files&&fileEl.files[0];
+  const btn=document.getElementById('nfBtn');
+  const fail=function(m){ const e=document.getElementById('nfErr'); e.textContent='⚠ '+m; e.style.display='block'; };
+  document.getElementById('nfErr').style.display='none';
+
+  if(!num){ fail('Informe o número da nota fiscal.'); return; }
+  if(file){
+    if(file.type!=='application/pdf' && !/\.pdf$/i.test(file.name)){ fail('Anexe um arquivo PDF.'); return; }
+    if(file.size>NF_MAX_BYTES){ fail('O PDF tem mais de 5 MB. Comprima o arquivo e tente de novo.'); return; }
+  }
+  const willHavePdf=!!file || (!!it.nfFile && !remove);
+  if(send){
+    if(!to||to.indexOf('@')<0){ fail('Informe um e-mail válido para o envio.'); return; }
+    if(!willHavePdf){ fail('Anexe o PDF da nota para poder enviá-la por e-mail.'); return; }
+  }
+  if((file||send) && !GAS_URL){ fail('GAS não configurado — não é possível anexar/enviar.'); return; }
+
+  btn.disabled=true; btn.textContent='⏳ Salvando...';
+  try{
+    const now=new Date().toISOString();
+    if(file){
+      const b64=await readFileB64(file);
+      const res=await gasPost({action:'uploadNF',reqId:r.id,itemIndex:ctx.idx,itemDesc:it.desc,nfNumber:num,
+        fileName:file.name,mime:'application/pdf',data:b64});
+      if(!res||!res.success) throw new Error((res&&res.error)||'Falha ao enviar o PDF ao Google Drive.');
+      it.nfFile={fileId:res.fileId,url:res.url,name:file.name,size:file.size,at:now,by:CU.name};
+    } else if(remove){
+      it.nfFile=null;
+    }
+    it.nfNumber=num; it.atendimentoDesc=desc; it.updatedAt=now;
+    if(!Array.isArray(it.history)) it.history=[];
+    it.history.push({at:now,by:CU.name,text:'NF '+num+(file?' (PDF anexado)':'')+(desc?' — atendimento registrado':'')});
+    touchReq(r,'item','NF '+num+' registrada no item "'+it.desc+'"'+(file?' com PDF':''));
+    saveDB();
+
+    if(send){
+      btn.textContent='📧 Enviando e-mail...';
+      const res=await doSendNF(r,ctx.idx,to);
+      if(res&&res.success) toast('📧 Nota enviada para '+to,'success');
+      else toast('NF salva, mas o e-mail falhou: '+((res&&res.error)||'sem resposta do GAS'),'error');
+    } else {
+      toast('Nota fiscal salva.','success');
+    }
+    _nfCtx=null; closeModal('nfModal'); refreshAll(ctx.reqId);
+  }catch(e){
+    fail(e.message||String(e));
+    btn.disabled=false; btn.textContent='💾 Salvar';
+  }
+}
+
+function doSendNF(r,idx,to){
+  const it=r.items[idx];
+  const qa=it.qtdRecebida||0;
+  return gasPost({action:'sendNFEmail',to:to,reqId:r.id,requester:r.requester,sector:reqSector(r),
+    itemDesc:it.desc,category:it.cat||'',qty:it.qty,qtdAtendida:qa,valorUnit:it.valorUnit||0,
+    total:(it.valorUnit||0)*(qa||it.qty||0),nfNumber:it.nfNumber||'',atendimento:it.atendimentoDesc||'',
+    attendedBy:r.attendedBy?r.attendedBy.name:'',sentBy:CU.name,
+    fileId:it.nfFile?it.nfFile.fileId:'',fileName:it.nfFile?it.nfFile.name:'',
+    date:new Date().toLocaleString('pt-BR')
+  }).then(function(res){
+    if(res&&res.success){
+      const now=new Date().toISOString();
+      it.nfSentAt=now; it.nfSentTo=to;
+      if(!Array.isArray(it.history)) it.history=[];
+      it.history.push({at:now,by:CU.name,text:'NF '+it.nfNumber+' enviada para '+to});
+      touchReq(r,'item','NF '+it.nfNumber+' enviada para '+to+' (item "'+it.desc+'")');
+      saveDB();
+    }
+    return res;
+  });
+}
+function sendNFNow(reqId,idx){
+  if(!isAdmin()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+  const it=r.items[idx]; if(!it) return;
+  if(!it.nfNumber||!it.nfFile){ toast('Registre o número e anexe o PDF antes de enviar.','error'); return; }
+  const to=it.nfSentTo||NF_EMAIL_DEFAULT;
+  if(!confirm('Enviar a nota fiscal '+it.nfNumber+' (com a descrição do atendimento) para '+to+'?')) return;
+  toast('Enviando e-mail...','warning');
+  doSendNF(r,idx,to).then(function(res){
+    if(res&&res.success){ toast('📧 Nota enviada para '+to,'success'); refreshAll(reqId); }
+    else toast('⚠ Falha ao enviar: '+((res&&res.error)||'sem resposta do GAS'),'error');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RELATÓRIOS
+// ═══════════════════════════════════════════════════════════════════════════
+let _relTables=[], _relHtml='', _relKpi='';
+
+function buildReportFilters(){
+  const keep=function(id){ const e=document.getElementById(id); return e?e.value:''; };
+  const cr=keep('relReq'), cc=keep('relCat');
+  const reqSel=document.getElementById('relReq');
+  if(reqSel){
+    const names=Array.from(new Set(DB.requests.map(function(r){ return r.requester; }))).sort();
+    reqSel.innerHTML='<option value="">Todos os requisitantes</option>'+names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+    reqSel.value=cr;
+  }
+  const catSel=document.getElementById('relCat');
+  if(catSel){
+    catSel.innerHTML='<option value="">Todas as categorias</option>'+DB.categories.map(function(c){ return '<option value="'+esc(c)+'">'+esc(c)+'</option>'; }).join('');
+    catSel.value=cc;
+  }
+  fillAttendantSelect('relAtend');
+  const st=document.getElementById('relStatus');
+  if(st && st.options.length<=1){
+    st.innerHTML='<option value="atendidos">Atendidos (parcial + recebido)</option><option value="todos">Todos os itens</option>'
+      +ITEM_ORDER.map(function(i){ return '<option value="'+i+'">'+ITEM_STATUS_LABELS[i]+'</option>'; }).join('');
+  }
+}
+
+function reportRows(){
+  const g=function(id){ const e=document.getElementById(id); return e?e.value:''; };
+  const fReq=g('relReq'), fAt=g('relAtend'), fCat=g('relCat'), fSt=g('relStatus')||'atendidos', fNf=g('relNF');
+  const dFrom=g('relFrom')?new Date(g('relFrom')+'T00:00:00'):null;
+  const dTo=g('relTo')?new Date(g('relTo')+'T23:59:59'):null;
+  const vMin=g('relVMin')!==''?parseFloat(g('relVMin')):null;
+  const vMax=g('relVMax')!==''?parseFloat(g('relVMax')):null;
+  const rows=[];
+  DB.requests.forEach(function(r){
+    (r.items||[]).forEach(function(it,i){
+      const st=it.itemStatus||0;
+      if(fSt==='atendidos' && st!==1 && st!==2) return;
+      if(fSt!=='atendidos' && fSt!=='todos' && String(st)!==fSt) return;
+      if(fReq && r.requester!==fReq) return;
+      if(fCat && it.cat!==fCat) return;
+      if(!attendMatches(r,fAt)) return;
+      if(fNf==='com' && !it.nfNumber) return;
+      if(fNf==='sem' && it.nfNumber) return;
+      const date=new Date(it.receivedAt||it.updatedAt||r.updatedAt||r.createdAt||r.date);
+      if(dFrom && date<dFrom) return;
+      if(dTo && date>dTo) return;
+      const unit=it.valorUnit||0, qa=it.qtdRecebida||0, valor=unit*qa;
+      if(vMin!==null && !isNaN(vMin) && valor<vMin) return;
+      if(vMax!==null && !isNaN(vMax) && valor>vMax) return;
+      rows.push({r:r,it:it,i:i,date:date,unit:unit,qa:qa,valor:valor,
+        atend:(r.attendedBy&&r.attendedBy.name)?r.attendedBy.name:'Sem atendente',
+        status:ITEM_STATUS_LABELS[st]});
+    });
+  });
+  return rows;
+}
+
+function groupRows(rows,keyFn){
+  const m={};
+  rows.forEach(function(x){
+    const k=keyFn(x);
+    if(!m[k]) m[k]={k:k,sols:{},itens:0,qa:0,valor:0};
+    m[k].sols[x.r.id]=1; m[k].itens++; m[k].qa+=x.qa; m[k].valor+=x.valor;
+  });
+  return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return b.valor-a.valor || b.itens-a.itens; });
+}
+
+function buildReportTables(rows,mode){
+  const fd=function(d){ return d.toLocaleDateString('pt-BR'); };
+  const totalValor=rows.reduce(function(a,x){ return a+x.valor; },0);
+  const T=[];
+  if(mode==='itens'){
+    const sorted=rows.slice().sort(function(a,b){ return b.date-a.date; });
+    T.push({title:'Itens atendidos',
+      headers:[['Data','t'],['Solicitação','t'],['Requisitante','t'],['Setor','t'],['Atendente','t'],['Item','t'],['Categoria','t'],['Status','t'],['Qtd solic.','n'],['Qtd atend.','n'],['Valor unit.','m'],['Valor atendido','m'],['Nota fiscal','t']],
+      rows:sorted.map(function(x){ return [fd(x.date),x.r.id,x.r.requester,reqSector(x.r),x.atend,x.it.desc,x.it.cat||'',x.status,x.it.qty||0,x.qa,x.unit,x.valor,x.it.nfNumber||'']; }),
+      totals:['TOTAL','','','','','','','',rows.reduce(function(a,x){ return a+(x.it.qty||0); },0),rows.reduce(function(a,x){ return a+x.qa; },0),null,totalValor,'']});
+  } else if(mode==='requisitante' || mode==='atendente'){
+    const g=groupRows(rows,function(x){ return mode==='requisitante'?x.r.requester:x.atend; });
+    T.push({title:mode==='requisitante'?'Por requisitante':'Por atendente',
+      headers:[[mode==='requisitante'?'Requisitante':'Atendente','t'],['Solicitações','n'],['Itens','n'],['Qtd atendida','n'],['Valor total','m'],['Valor médio/item','m'],['% do valor','p']],
+      rows:g.map(function(x){ return [x.k,Object.keys(x.sols).length,x.itens,x.qa,x.valor,x.itens?x.valor/x.itens:0,totalValor?x.valor/totalValor*100:0]; }),
+      totals:['TOTAL',Object.keys(rows.reduce(function(a,x){ a[x.r.id]=1; return a; },{})).length,rows.length,rows.reduce(function(a,x){ return a+x.qa; },0),totalValor,rows.length?totalValor/rows.length:0,100]});
+  } else { // valor
+    const faixas=[['Até R$ 100',0,100],['R$ 100 a 500',100,500],['R$ 500 a 1.000',500,1000],['R$ 1.000 a 5.000',1000,5000],['Acima de R$ 5.000',5000,Infinity]];
+    const frows=faixas.map(function(f){
+      const sel=rows.filter(function(x){ return x.valor>=f[1] && x.valor<f[2]; });
+      const v=sel.reduce(function(a,x){ return a+x.valor; },0);
+      return [f[0],sel.length,v,totalValor?v/totalValor*100:0];
+    });
+    T.push({title:'Por faixa de valor (valor atendido do item)',
+      headers:[['Faixa','t'],['Itens','n'],['Valor total','m'],['% do valor','p']],
+      rows:frows,totals:['TOTAL',rows.length,totalValor,100]});
+    const top=rows.slice().sort(function(a,b){ return b.valor-a.valor; }).slice(0,20);
+    T.push({title:'Top 20 itens por valor',
+      headers:[['Item','t'],['Solicitação','t'],['Requisitante','t'],['Atendente','t'],['Qtd atend.','n'],['Valor unit.','m'],['Valor atendido','m'],['Nota fiscal','t']],
+      rows:top.map(function(x){ return [x.it.desc,x.r.id,x.r.requester,x.atend,x.qa,x.unit,x.valor,x.it.nfNumber||'']; }),
+      totals:null});
+  }
+  return T;
+}
+
+function fmtCell(v,t){
+  if(v===null||v===undefined||v==='') return '';
+  if(t==='m') return brl(v);
+  if(t==='p') return Number(v).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+  if(t==='n') return Number(v).toLocaleString('pt-BR');
+  return esc(v);
+}
+function tableHtml(t){
+  const al=function(ty){ return ty==='t'?'':' style="text-align:right;white-space:nowrap;"'; };
+  let h='<div style="font-weight:800;font-size:13px;margin:14px 0 6px;color:#2c3e30;">'+esc(t.title)+'</div>'
+    +'<table class="itable" style="min-width:640px;"><thead><tr>'+t.headers.map(function(c){ return '<th'+al(c[1])+'>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>';
+  h+=t.rows.length
+    ? t.rows.map(function(r){ return '<tr>'+r.map(function(v,i){ return '<td'+al(t.headers[i][1])+'>'+fmtCell(v,t.headers[i][1])+'</td>'; }).join('')+'</tr>'; }).join('')
+    : '<tr><td colspan="'+t.headers.length+'" style="text-align:center;color:#7a9a80;padding:20px;">Nenhum item para os filtros selecionados.</td></tr>';
+  if(t.totals && t.rows.length) h+='<tr style="font-weight:900;background:#f0f6f1;">'+t.totals.map(function(v,i){ return '<td'+al(t.headers[i][1])+'>'+fmtCell(v,t.headers[i][1])+'</td>'; }).join('')+'</tr>';
+  return h+'</tbody></table>';
+}
+function describeFilters(){
+  const g=function(id){ const e=document.getElementById(id); return e?e.value:''; };
+  const sel=function(id){ const e=document.getElementById(id); return e&&e.selectedIndex>=0?e.options[e.selectedIndex].text:''; };
+  const p=[];
+  p.push('Tipo: '+sel('relMode'));
+  p.push('Status: '+sel('relStatus'));
+  if(g('relFrom')||g('relTo')) p.push('Período: '+(g('relFrom')?new Date(g('relFrom')+'T00:00:00').toLocaleDateString('pt-BR'):'início')+' a '+(g('relTo')?new Date(g('relTo')+'T00:00:00').toLocaleDateString('pt-BR'):'hoje'));
+  if(g('relReq')) p.push('Requisitante: '+g('relReq'));
+  if(g('relAtend')) p.push('Atendente: '+sel('relAtend'));
+  if(g('relCat')) p.push('Categoria: '+g('relCat'));
+  if(g('relNF')) p.push('Nota fiscal: '+sel('relNF'));
+  if(g('relVMin')!==''||g('relVMax')!=='') p.push('Valor: '+(g('relVMin')!==''?brl(g('relVMin')):'—')+' a '+(g('relVMax')!==''?brl(g('relVMax')):'—'));
+  return p.join(' • ');
+}
+function renderReport(){
+  const el=document.getElementById('relResult'); if(!el) return;
+  if(!(isAdmin()||isDirecao())){ el.innerHTML=''; return; }
+  const mode=(document.getElementById('relMode')||{}).value||'itens';
+  const rows=reportRows();
+  _relTables=buildReportTables(rows,mode);
+  const total=rows.reduce(function(a,x){ return a+x.valor; },0);
+  const sols=Object.keys(rows.reduce(function(a,x){ a[x.r.id]=1; return a; },{})).length;
+  const reqs=Object.keys(rows.reduce(function(a,x){ a[x.r.requester]=1; return a; },{})).length;
+  const card=function(l,v){ return '<div class="stat-card"><div class="stat-lbl">'+l+'</div><div class="stat-val" style="font-size:20px;">'+v+'</div></div>'; };
+  _relKpi=card('Itens',rows.length)+card('Valor atendido',brl(total))+card('Solicitações',sols)+card('Requisitantes',reqs);
+  _relHtml=_relTables.map(tableHtml).join('');
+  el.innerHTML='<div class="stats-grid" style="margin-bottom:6px;">'+_relKpi+'</div>'
+    +'<div style="font-size:11.5px;color:#7a9a80;margin:4px 0 6px;">Valor = valor unitário × quantidade atendida. Data = quando o item passou a ser atendido.</div>'
+    +'<div class="card" style="padding:14px;overflow-x:auto;">'+_relHtml+'</div>';
+}
+function csvCell(v,t){
+  if(v===null||v===undefined) return '';
+  if(t==='m'||t==='p'||t==='n') return String(Number(v).toFixed(t==='n'?0:2)).replace('.',',');
+  return '"'+String(v).replace(/"/g,'""')+'"';
+}
+function exportReportCSV(){
+  if(!_relTables.length){ renderReport(); }
+  if(!_relTables.length||!_relTables.some(function(t){ return t.rows.length; })){ toast('Nada para exportar com os filtros atuais.','warning'); return; }
+  const lines=['"Relatório — Hospital Lauro Reus"','"'+describeFilters().replace(/"/g,'""')+'"','"Gerado em '+new Date().toLocaleString('pt-BR')+' por '+(CU?CU.name:'')+'"',''];
+  _relTables.forEach(function(t){
+    lines.push('"'+t.title+'"');
+    lines.push(t.headers.map(function(h){ return '"'+h[0]+'"'; }).join(';'));
+    t.rows.forEach(function(r){ lines.push(r.map(function(v,i){ return csvCell(v,t.headers[i][1]); }).join(';')); });
+    if(t.totals) lines.push(t.totals.map(function(v,i){ return csvCell(v,t.headers[i][1]); }).join(';'));
+    lines.push('');
+  });
+  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='relatorio_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); },2000);
+  toast('Relatório exportado (CSV).','success');
+}
+function printReport(){
+  if(!_relHtml){ renderReport(); }
+  const w=window.open('','_blank');
+  if(!w){ toast('O navegador bloqueou a janela de impressão. Permita pop-ups ou use a exportação CSV.','error'); return; }
+  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório — Hospital Lauro Reus</title>'
+    +'<style>body{font-family:Segoe UI,Arial,sans-serif;color:#1a2530;margin:24px;font-size:12px}h1{font-size:18px;margin:0 0 4px}'
+    +'.sub{color:#5a6b78;font-size:11px;margin-bottom:10px}table{border-collapse:collapse;width:100%;margin-bottom:12px}'
+    +'th,td{border:1px solid #cfd8d2;padding:5px 7px;text-align:left;font-size:11px}th{background:#e8f0ea}'
+    +'@media print{@page{size:landscape;margin:12mm}}</style></head><body>'
+    +'<h1>Hospital Lauro Reus — Relatório</h1><div class="sub">'+esc(describeFilters())+'<br>Gerado em '+new Date().toLocaleString('pt-BR')+' por '+esc(CU?CU.name:'')+'</div>'
+    +_relHtml.replace(/class="itable"/g,'').replace(/style="min-width:640px;"/g,'')
+    +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+  w.document.close();
 }
 
 // ── BOOT ──
