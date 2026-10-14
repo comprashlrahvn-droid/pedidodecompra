@@ -297,6 +297,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 .ist-ref{background:rgba(155,28,26,.14);color:#9b1c1a;}
 .ist-quot{background:rgba(31,111,235,.13);color:#1f6feb;}
 .ist-wait{background:rgba(139,92,246,.14);color:#6d3fd1;}
+@keyframes srspin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -745,6 +746,12 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="submitResultModal" style="z-index:3000;">
+  <div style="background:#fff;border-radius:18px;padding:38px 34px;max-width:520px;width:calc(100% - 32px);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45);">
+    <div id="srBox"></div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="notifModal">
   <div class="modal" style="max-width:520px;">
     <div class="mhdr green"><h3 id="notifTitle">&#128276; Novidades</h3></div>
@@ -910,7 +917,7 @@ function loadDB(){
   normalizeDB(d);
   return d;
 }
-function saveDB(){
+function saveDB(opts){
   DB._savedAt = new Date().toISOString();
   const json = JSON.stringify(DB);
   // PRIMEIRO: salvar localmente (síncrono, instantâneo)
@@ -918,7 +925,7 @@ function saveDB(){
   try{ localStorage.setItem('hlr_db_backup', json); }catch(e){}
   // DEPOIS: enviar ao GAS em background (assíncrono, pode falhar)
   // Usar setTimeout para não bloquear a UI
-  setTimeout(function(){ syncToGAS(); }, 0);
+  if(!(opts&&opts.noSync)) setTimeout(function(){ syncToGAS(); }, 0);
 }
 
 let DB=loadDB();
@@ -1557,20 +1564,12 @@ function submitReq(){
   // Salvar arquivos anexados diretamente no request
   req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
   touchReq(req,'criada','Solicitação criada por '+name,{noAttend:true});
-  DB.requests.push(req); saveDB();
+  DB.requests.push(req); saveDB({noSync:true});   // a gravação no GAS é feita (e confirmada) mais abaixo
   items.forEach(it=>saveItemMem(it.desc,it.cat));
-  // Notificar TODOS os Masters ativos (inclui a assistente) por e-mail
-  if(GAS_URL){
-    const itensTxt=(req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', ');
-    DB.users.filter(function(u){ return u.role==='master'&&u.status==='active'&&u.email&&u.id!==CU.id; }).forEach(function(m){
-      gasPost({action:'sendStatusEmail',to:m.email,userName:m.name,reqId:req.id,items:itensTxt,
-        oldStatus:'—',newStatus:'🆕 Nova Solicitação de '+req.requester+' ('+req.type+')',
-        date:new Date().toLocaleDateString('pt-BR')}).then(function(res){
-        if(!(res&&res.success)) console.warn('Falha ao notificar Master '+m.email+':', res&&res.error);
-      });
-    });
-  }
-  clearForm(); toast('Solicitação '+req.id+' enviada!','success'); navigate('minhas');
+  clearForm(); navigate('minhas');
+  // Confirmação grande: só diz "sucesso" se o GAS realmente gravou no banco
+  showSubmitResult('loading',req);
+  syncToGASAwait().then(function(res){ finishSubmitSave(req,res); });
 }
 
 // ── BADGES ──
@@ -2389,7 +2388,7 @@ function confirmRequestAlcada(){
   saveDB();
   closeModal('approverModal');
   toast('Solicitação enviada para '+approver.name+' ('+emailDestino+')!','success');
-  if(r.status!==oldStatus) emailUser(r,oldStatus);
+  emailRequesterAlcada(r,'enviada',oldStatus,{approver:approver.name});
 
   if(!GAS_URL){
     toast('GAS não configurado — e-mail não enviado.','error');
@@ -2430,13 +2429,7 @@ function resolveAlcada(reqId,decision){
   saveDB();
 
   const titulo=ok?'✅ Alçada Aprovada por '+CU.name:'❌ Alçada Rejeitada por '+CU.name;
-  const sol=DB.users.find(function(u){ return u.id===r.userId; });
-  if(GAS_URL && sol && sol.email){
-    gasPost({action:'sendStatusEmail',to:sol.email,userName:sol.name,reqId:r.id,
-      items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
-      oldStatus:'Aguardando Aprovação de Alçada',newStatus:titulo,reason:obs,
-      attendedBy:r.attendedBy?r.attendedBy.name:'',date:new Date().toLocaleDateString('pt-BR')});
-  }
+  emailRequesterAlcada(r,decision,null,{approver:CU.name,reason:obs});
   emailStaff(r,titulo+' ('+r.requester+')',obs);
   toast(ok?'✅ Solicitação aprovada!':'Solicitação rejeitada.',ok?'success':'warning');
   refreshAll(reqId);
@@ -3904,6 +3897,111 @@ function printReport(){
     +_relHtml.replace(/class="itable"/g,'').replace(/style="min-width:640px;"/g,'')
     +'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
   w.document.close();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  v3.1 — CONFIRMAÇÃO GRANDE AO REGISTRAR PEDIDO (sucesso/falha no GAS)
+// ═══════════════════════════════════════════════════════════════════════════
+// Salva no GAS e devolve uma Promise com o resultado real da gravação
+function syncToGASAwait(){
+  return new Promise(function(resolve){
+    if(!GAS_URL){ resolve({ok:false,error:'GAS_URL não configurado no sistema.'}); return; }
+    const attempt=function(){
+      if(gasSyncing){ setTimeout(attempt,400); return; }
+      gasSyncing=true; gasSetStatus('sync','Salvando...');
+      let snap=''; try{ snap=JSON.stringify(DB); }catch(e){}
+      gasPost({action:'save',data:DB}).then(function(res){
+        gasSyncing=false;
+        if(res&&res.success){
+          gasSetStatus('ok','🟢 Salvo');
+          try{ localStorage.removeItem('hlr_pending_sync'); }catch(e){}
+          resolve({ok:true,chunks:res.chunks||1});
+        } else {
+          gasSetStatus('err','⚠ Não salvo no banco — salvo só neste aparelho');
+          try{ localStorage.setItem('hlr_pending_sync',snap); }catch(e){}
+          resolve({ok:false,error:(res&&res.error)||'O GAS não respondeu.'});
+        }
+      }).catch(function(e){
+        gasSyncing=false;
+        gasSetStatus('err','⚠ Erro de rede');
+        try{ localStorage.setItem('hlr_pending_sync',snap); }catch(e2){}
+        resolve({ok:false,error:(e&&e.message)||'Erro de rede.'});
+      });
+    };
+    attempt();
+  });
+}
+
+function notifyMastersNewReq(req){
+  if(!GAS_URL) return;
+  const itensTxt=(req.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', ');
+  DB.users.filter(function(u){ return u.role==='master'&&u.status==='active'&&u.email&&u.id!==CU.id; }).forEach(function(m){
+    gasPost({action:'sendStatusEmail',to:m.email,userName:m.name,reqId:req.id,items:itensTxt,
+      oldStatus:'—',newStatus:'🆕 Nova Solicitação de '+req.requester+' ('+req.type+')',
+      date:new Date().toLocaleDateString('pt-BR')}).then(function(res){
+      if(!(res&&res.success)) console.warn('Falha ao notificar Master '+m.email+':', res&&res.error);
+    });
+  });
+}
+
+// Tela grande no centro: loading | ok | fail
+function showSubmitResult(state,req,err){
+  const box=document.getElementById('srBox'); if(!box) return;
+  const btn=function(txt,fn,cls){ return '<button class="btn '+cls+'" style="font-size:15px;padding:12px 26px;" onclick="'+fn+'">'+txt+'</button>'; };
+  let html='';
+  if(state==='loading'){
+    html='<div style="width:72px;height:72px;margin:0 auto 18px;border:7px solid #dce8de;border-top-color:#27ae60;border-radius:50%;animation:srspin .9s linear infinite;"></div>'
+      +'<div style="font-size:24px;font-weight:900;color:#1a3320;">Registrando pedido...</div>'
+      +'<div style="font-size:14.5px;color:#5a7a60;margin-top:8px;">Gravando no banco de dados. Aguarde, não feche esta tela.</div>';
+  } else if(state==='ok'){
+    html='<div style="width:86px;height:86px;margin:0 auto 16px;border-radius:50%;background:#27ae60;color:#fff;font-size:52px;line-height:86px;font-weight:900;">✓</div>'
+      +'<div style="font-size:26px;font-weight:900;color:#1e8c3a;">Pedido registrado com sucesso!</div>'
+      +'<div style="font-size:15px;color:#2c3e30;margin-top:10px;"><strong>'+esc(req.id)+'</strong> foi salvo no banco de dados.</div>'
+      +'<div style="margin-top:20px;">'+btn('OK','closeSubmitResult()','btn-green')+'</div>';
+  } else {
+    html='<div style="width:86px;height:86px;margin:0 auto 16px;border-radius:50%;background:#c0392b;color:#fff;font-size:52px;line-height:86px;font-weight:900;">✗</div>'
+      +'<div style="font-size:25px;font-weight:900;color:#c0392b;">O pedido NÃO foi registrado no banco de dados</div>'
+      +'<div style="font-size:14.5px;color:#2c3e30;margin-top:10px;"><strong>'+esc(req.id)+'</strong> ficou salvo apenas neste aparelho. A gravação no GAS falhou:</div>'
+      +'<div style="font-size:13px;color:#9b1c1a;background:#fff5f5;border:1.5px solid #e08080;border-radius:8px;padding:9px 12px;margin:10px auto 0;max-width:420px;">'+esc(err||'Sem resposta do GAS')+'</div>'
+      +'<div style="font-size:12.5px;color:#7a8a99;margin-top:10px;">O sistema tentará novamente em 30 segundos. Você também pode tentar agora.</div>'
+      +'<div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">'
+        +btn('🔄 Tentar novamente','retrySubmitSave(\''+req.id+'\')','btn-green')
+        +btn('Fechar','closeSubmitResult()','btn-outline')+'</div>';
+  }
+  box.innerHTML=html;
+  document.getElementById('submitResultModal').classList.remove('hidden');
+}
+function closeSubmitResult(){ document.getElementById('submitResultModal').classList.add('hidden'); }
+function finishSubmitSave(req,res){
+  if(res.ok){ notifyMastersNewReq(req); showSubmitResult('ok',req); }
+  else {
+    showSubmitResult('fail',req,res.error);
+    setTimeout(function(){ try{ if(localStorage.getItem('hlr_pending_sync')) syncToGAS(); }catch(e){} },30000);
+  }
+}
+function retrySubmitSave(reqId){
+  const req=DB.requests.find(function(r){ return r.id===reqId; }); if(!req) return;
+  showSubmitResult('loading',req);
+  syncToGASAwait().then(function(res){ finishSubmitSave(req,res); });
+}
+
+// ── ALÇADA: e-mail ao REQUISITANTE (enviada / aprovada / rejeitada) ───────
+function emailRequesterAlcada(r,kind,oldStatus,extra){
+  if(!GAS_URL) return;
+  extra=extra||{};
+  const user=DB.users.find(function(u){ return u.id===r.userId; });
+  if(!user||!user.email){ toast('⚠ Requisitante sem e-mail cadastrado — aviso de alçada não enviado.','warning'); return; }
+  let old, now, event;
+  if(kind==='enviada'){ event='alcada_enviada'; old=stLabel(oldStatus); now='Encaminhada para alçada de aprovação — aprovador: '+extra.approver; }
+  else if(kind==='aprovada'){ event='alcada_aprovada'; old='Aguardando decisão da alçada'; now='✅ Alçada aprovada por '+extra.approver; }
+  else { event='alcada_rejeitada'; old='Aguardando decisão da alçada'; now='❌ Alçada rejeitada por '+extra.approver; }
+  gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:r.id,
+    items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
+    oldStatus:old,newStatus:now,reason:extra.reason||'',event:event,actor:CU?CU.name:'',
+    attendedBy:r.attendedBy?r.attendedBy.name:'',date:new Date().toLocaleDateString('pt-BR')
+  }).then(function(res){
+    if(!(res&&res.success)) toast('⚠ E-mail ao requisitante não enviado: '+((res&&res.error)||'verifique o GAS'),'error');
+  });
 }
 
 // ── BOOT ──
