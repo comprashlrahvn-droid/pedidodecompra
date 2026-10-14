@@ -714,7 +714,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
       <textarea id="closeReqReason" class="fc" rows="4" placeholder="Informe o motivo (obrigat&oacute;rio)..." style="margin-top:5px;background:#f5f8f5;color:#2c3e30;border:1.5px solid #dce8de;"></textarea>
       <div id="closeReqErr" style="display:none;color:var(--red);font-size:11.5px;font-weight:700;margin-top:4px;">&#9888; Informe o motivo (m&iacute;nimo 3 caracteres)</div>
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-outline btn-sm" onclick="_closeCtx=null;closeModal('closeReqModal')">Voltar</button>
+        <button class="btn btn-outline btn-sm" onclick="cancelCloseReq()">Voltar</button>
         <button class="btn btn-danger btn-sm" id="closeReqBtn" onclick="confirmCloseReq()">Confirmar</button>
       </div>
     </div>
@@ -1749,7 +1749,7 @@ function adminUpdate(reqId){
     changed=true;
   }
   if(!changed){ toast('Nada foi alterado.','warning'); return; }
-  saveDB(); toast(reqId+': atualizado.','success'); closeModal('detailModal'); refreshAll();
+  saveDBConfirm(); toast(reqId+': atualizado.','success'); closeModal('detailModal'); refreshAll();
 }
 function deleteReq(reqId){
   if(!confirm('Excluir a solicitação '+reqId+' permanentemente? Esta ação não pode ser desfeita.')) return;
@@ -2636,19 +2636,25 @@ function renderAdminList(){
   }).join('');
 }
 function quickUpd(reqId,val){
-  if(!isAdmin()) return;
-  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
-  const ns=parseInt(val);
-  if(ns===r.status) return;
-  if(ns>=9){
-    renderAdminList();
-    if(r.status>=9){ toast('Reabra a solicitação antes de trocar entre Recusada/Cancelada.','warning'); return; }
-    openCloseModal(reqId,ns===9?'recusada':'cancelada'); return;
+  try{
+    if(!isAdmin()) return;
+    const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
+    const ns=parseInt(val);
+    if(ns===r.status) return;
+    if(ns>=9){
+      renderAdminList();   // a lista volta ao status real; só muda de verdade após confirmar o motivo
+      if(r.status>=9){ toast('Reabra a solicitação antes de trocar entre Recusada/Cancelada.','warning'); return; }
+      openCloseModal(reqId,ns===9?'recusada':'cancelada'); return;
+    }
+    if(r.status>=9){ reopenReq(reqId,ns); return; }
+    const old=r.status;
+    applyStatus(r,ns); emailUser(r,old);
+    saveDBConfirm(); toast(reqId+': status atualizado.','success'); renderAdminList();
+  }catch(e){
+    console.error(e);
+    toast('⚠ Erro ao atualizar o status: '+(e&&e.message?e.message:e),'error');
+    try{ renderAdminList(); }catch(x){}
   }
-  if(r.status>=9){ reopenReq(reqId,ns); return; }
-  const old=r.status;
-  applyStatus(r,ns); emailUser(r,old);
-  saveDB(); toast(reqId+': status atualizado.','success'); renderAdminList();
 }
 
 // ── USERS PAGE (Somente Master) ──
@@ -3192,7 +3198,13 @@ function confirmCloseReq(){
     else emailItem(r,ctx.idx,ctx.type,reason);
     toast('Item '+(ctx.type==='recusada'?'recusado':'cancelado')+'.','warning');
   } else {
-    closeRequest(r,ctx.type,reason);
+    try{
+      closeRequest(r,ctx.type,reason);
+      if(r.status!==(ctx.type==='recusada'?ST_RECUSADA:ST_CANCELADA)) toast('⚠ O status não foi alterado. Tente novamente.','error');
+    }catch(e){
+      console.error(e);
+      toast('⚠ Erro ao '+(ctx.type==='recusada'?'recusar':'cancelar')+': '+(e&&e.message?e.message:e),'error');
+    }
   }
   refreshAll(ctx.reqId);
 }
@@ -3210,7 +3222,7 @@ function closeRequest(r,type,reason){
   });
   if(r.alcada && r.alcada.status==='pendente'){ r.alcada.status='cancelada'; r.alcada.obs='Solicitação '+(type==='recusada'?'recusada':'cancelada'); }
   applyStatus(r,type==='recusada'?ST_RECUSADA:ST_CANCELADA,{reason:reason});
-  saveDB();
+  saveDBConfirm();
   if(isAdmin()) emailUser(r,old,{reason:reason,event:type});
   else emailStaff(r,'✖ Solicitação cancelada pelo requisitante ('+r.requester+')',reason);
   toast(r.id+': solicitação '+(type==='recusada'?'recusada':'cancelada')+'.','warning');
@@ -3230,7 +3242,7 @@ function reopenReq(reqId,target){
   if(r.alcada && r.alcada.status==='cancelada') r.alcada.status='pendente';
   r.closure=null;
   applyStatus(r,ns,{reason:'Solicitação reaberta'});
-  saveDB(); emailUser(r,old);
+  saveDBConfirm(); emailUser(r,old);
   toast(reqId+': solicitação reaberta.','success'); refreshAll(reqId);
 }
 
@@ -4002,6 +4014,22 @@ function emailRequesterAlcada(r,kind,oldStatus,extra){
   }).then(function(res){
     if(!(res&&res.success)) toast('⚠ E-mail ao requisitante não enviado: '+((res&&res.error)||'verifique o GAS'),'error');
   });
+}
+
+// ── v3.2: salvar alterações COM confirmação + cancelamento seguro do modal ──
+// Salva e confirma no GAS; se a gravação falhar, avisa na hora (a alteração só existiria neste aparelho)
+function saveDBConfirm(){
+  saveDB({noSync:true});
+  syncToGASAwait().then(function(res){
+    if(!res.ok){
+      toast('⚠ A alteração NÃO foi gravada no banco (GAS): '+res.error+'. Ficou só neste aparelho; o sistema tentará de novo.','error');
+      setTimeout(function(){ try{ if(localStorage.getItem('hlr_pending_sync')) syncToGAS(); }catch(e){} },30000);
+    }
+  });
+}
+function cancelCloseReq(){
+  _closeCtx=null; closeModal('closeReqModal');
+  refreshAll();   // garante que a lista volte a mostrar o status REAL (nada foi alterado)
 }
 
 // ── BOOT ──
