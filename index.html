@@ -4,6 +4,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>Hospital Lauro Reus - Sistema de Solicitações</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
@@ -408,6 +410,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
     </div>
     <div class="sb-nav" id="sbNav"></div>
     <div class="sb-foot">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);padding:0 4px 6px;">Versão <strong id="appVer"></strong></div>
       <div id="gasStatusBar" class="gas-status" style="display:none;">
         <div class="gas-dot" id="gasDot"></div>
         <span id="gasLabel" style="flex:1;">Banco de dados</span>
@@ -2628,7 +2631,7 @@ function renderAdminList(){
       +((r.status>=9&&r.closure&&r.closure.reason)?'<div style="font-size:11.5px;color:#9b1c1a;margin-top:3px;font-style:italic;">Motivo: '+esc(r.closure.reason)+'</div>':'')
     +'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
-      +'<select class="ssel" onchange="quickUpd(\''+r.id+'\',this.value)">'+DB.statusLabels.map(function(l,i){ return '<option value="'+i+'"'+(i===r.status?' selected':'')+'>'+l+'</option>'; }).join('')+'</select>'
+      +'<select class="ssel" autocomplete="off" onchange="quickUpd(\''+r.id+'\',this.value)">'+DB.statusLabels.map(function(l,i){ return '<option value="'+i+'"'+(i===r.status?' selected':'')+'>'+l+'</option>'; }).join('')+'</select>'
       +((isMaster()&&r.status<8)?'<button class="btn btn-yellow btn-sm" onclick="openApproverModal(\''+r.id+'\')">📤 Alçada</button>':'')
       +((isAdmin()&&r.status<8)?'<button class="btn btn-danger btn-sm" onclick="openCloseModal(\''+r.id+'\',\'recusada\')">🚫 Recusar</button><button class="btn btn-outline btn-sm" onclick="openCloseModal(\''+r.id+'\',\'cancelada\')">✖ Cancelar</button>':'')
       +'<button class="btn btn-outline btn-sm" onclick="showDetail(\''+r.id+'\')">Detalhes</button>'
@@ -3222,7 +3225,7 @@ function closeRequest(r,type,reason){
   });
   if(r.alcada && r.alcada.status==='pendente'){ r.alcada.status='cancelada'; r.alcada.obs='Solicitação '+(type==='recusada'?'recusada':'cancelada'); }
   applyStatus(r,type==='recusada'?ST_RECUSADA:ST_CANCELADA,{reason:reason});
-  saveDBConfirm();
+  saveWithBigResult(r.id+' foi '+(type==='recusada'?'RECUSADA':'CANCELADA'),'Status alterado e gravado no banco de dados.',r.id+': alteração NÃO gravada no banco');
   if(isAdmin()) emailUser(r,old,{reason:reason,event:type});
   else emailStaff(r,'✖ Solicitação cancelada pelo requisitante ('+r.requester+')',reason);
   toast(r.id+': solicitação '+(type==='recusada'?'recusada':'cancelada')+'.','warning');
@@ -3242,7 +3245,7 @@ function reopenReq(reqId,target){
   if(r.alcada && r.alcada.status==='cancelada') r.alcada.status='pendente';
   r.closure=null;
   applyStatus(r,ns,{reason:'Solicitação reaberta'});
-  saveDBConfirm(); emailUser(r,old);
+  saveWithBigResult(reqId+' foi reaberta','Status alterado e gravado no banco de dados.',reqId+': alteração NÃO gravada no banco'); emailUser(r,old);
   toast(reqId+': solicitação reaberta.','success'); refreshAll(reqId);
 }
 
@@ -4030,6 +4033,47 @@ function saveDBConfirm(){
 function cancelCloseReq(){
   _closeCtx=null; closeModal('closeReqModal');
   refreshAll();   // garante que a lista volte a mostrar o status REAL (nada foi alterado)
+}
+
+// ── v3.3: versão + confirmação grande de recusa/cancelamento/reabertura ───
+const APP_VERSION='3.3 (15/10/2026)';
+document.addEventListener('DOMContentLoaded',function(){ const e=document.getElementById('appVer'); if(e) e.textContent=APP_VERSION; });
+(function(){ const e=document.getElementById('appVer'); if(e) e.textContent=APP_VERSION; })();
+
+// Tela grande (mesmo painel do "pedido registrado") para ações sobre uma solicitação existente
+function showActionResult(state,title,detail,err){
+  const box=document.getElementById('srBox'); if(!box) return;
+  let html='';
+  if(state==='loading'){
+    html='<div style="width:72px;height:72px;margin:0 auto 18px;border:7px solid #dce8de;border-top-color:#27ae60;border-radius:50%;animation:srspin .9s linear infinite;"></div>'
+      +'<div style="font-size:24px;font-weight:900;color:#1a3320;">'+esc(title)+'</div>'
+      +'<div style="font-size:14.5px;color:#5a7a60;margin-top:8px;">Gravando no banco de dados. Aguarde...</div>';
+  } else if(state==='ok'){
+    html='<div style="width:86px;height:86px;margin:0 auto 16px;border-radius:50%;background:#27ae60;color:#fff;font-size:52px;line-height:86px;font-weight:900;">✓</div>'
+      +'<div style="font-size:25px;font-weight:900;color:#1e8c3a;">'+esc(title)+'</div>'
+      +'<div style="font-size:15px;color:#2c3e30;margin-top:10px;">'+esc(detail||'')+'</div>'
+      +'<div style="margin-top:20px;"><button class="btn btn-green" style="font-size:15px;padding:12px 26px;" onclick="closeSubmitResult()">OK</button></div>';
+  } else {
+    html='<div style="width:86px;height:86px;margin:0 auto 16px;border-radius:50%;background:#c0392b;color:#fff;font-size:52px;line-height:86px;font-weight:900;">✗</div>'
+      +'<div style="font-size:24px;font-weight:900;color:#c0392b;">'+esc(title)+'</div>'
+      +'<div style="font-size:14.5px;color:#2c3e30;margin-top:10px;">'+esc(detail||'')+'</div>'
+      +(err?'<div style="font-size:13px;color:#9b1c1a;background:#fff5f5;border:1.5px solid #e08080;border-radius:8px;padding:9px 12px;margin:10px auto 0;max-width:420px;">'+esc(err)+'</div>':'')
+      +'<div style="margin-top:20px;"><button class="btn btn-outline" style="font-size:15px;padding:12px 26px;" onclick="closeSubmitResult()">Fechar</button></div>';
+  }
+  box.innerHTML=html;
+  document.getElementById('submitResultModal').classList.remove('hidden');
+}
+// Salva e mostra, em tela grande, se a alteração realmente foi gravada no banco
+function saveWithBigResult(titleOk,detailOk,titleFail){
+  saveDB({noSync:true});
+  showActionResult('loading','Salvando alteração...');
+  syncToGASAwait().then(function(res){
+    if(res.ok) showActionResult('ok',titleOk,detailOk);
+    else{
+      showActionResult('fail',titleFail,'A alteração foi feita só neste aparelho. O sistema tentará gravar de novo em 30 segundos.',res.error);
+      setTimeout(function(){ try{ if(localStorage.getItem('hlr_pending_sync')) syncToGAS(); }catch(e){} },30000);
+    }
+  });
 }
 
 // ── BOOT ──
