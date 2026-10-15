@@ -872,6 +872,34 @@ function normalizeDB(d){
   for(let i=0;i<DEFAULT_STATUS_LABELS.length;i++){
     if(!d.statusLabels[i]) d.statusLabels[i] = DEFAULT_STATUS_LABELS[i];
   }
+  if(dedupeRequestIds(d)) window.__idRepaired = true;
+}
+
+// Duas solicitações com o MESMO número quebram todas as ações (o sistema sempre acha a primeira).
+// Reparo determinístico: a mais antiga mantém o número; as demais viram SOL-028-2, SOL-028-3...
+function dedupeRequestIds(d){
+  const reqs=(d&&d.requests)||[];
+  const groups={}, used={};
+  reqs.forEach(function(r){ used[r.id]=1; (groups[r.id]=groups[r.id]||[]).push(r); });
+  let changed=false;
+  Object.keys(groups).forEach(function(id){
+    const g=groups[id]; if(g.length<2) return;
+    g.sort(function(a,b){
+      return String(a.createdAt||a.date||'').localeCompare(String(b.createdAt||b.date||''))
+          || String(a.userId).localeCompare(String(b.userId))
+          || String(a.requester).localeCompare(String(b.requester));
+    });
+    for(let i=1;i<g.length;i++){
+      let n=i+1, nid;
+      do{ nid=id+'-'+n; n++; }while(used[nid]);
+      used[nid]=1;
+      g[i].renamedFrom=id; g[i].id=nid;
+      if(!Array.isArray(g[i].activity)) g[i].activity=[];
+      g[i].activity.push({at:new Date().toISOString(),by:'Sistema',byId:null,type:'status',text:'Número duplicado corrigido: '+id+' → '+nid});
+      changed=true;
+    }
+  });
+  return changed;
 }
 
 function migrarRequisicoes(requests){
@@ -1004,15 +1032,15 @@ function processGasLoad(text){
       if(localIsEmpty||gasIsNewer){
         var localReqs=DB.requests||[], gasReqs=data.requests||[];
         var merged=[], localMap={};
-        localReqs.forEach(function(r){ localMap[r.id]=r; });
+        localReqs.forEach(function(r){ localMap[r.id+'|'+(r.createdAt||'')]=r; });
         gasReqs.forEach(function(r){
-          var loc=localMap[r.id];
+          var rkey=r.id+'|'+(r.createdAt||''); var loc=localMap[rkey];
           if(!loc){ merged.push(r); }
           else{
             var lt=loc.updatedAt||loc.createdAt||'';
             var gt=r.updatedAt||r.createdAt||'';
             merged.push(lt>=gt?loc:r);
-            delete localMap[r.id];
+            delete localMap[rkey];
           }
         });
         Object.keys(localMap).forEach(function(id){ merged.push(localMap[id]); });
@@ -1020,6 +1048,7 @@ function processGasLoad(text){
         DB=data; DB.requests=merged;
         migrarRequisicoes(DB.requests);
         normalizeDB(DB);
+        flushIdRepair();
         (DB.users||[]).forEach(function(u){ if(!u.notifications) u.notifications=[]; });
         var json=JSON.stringify(DB);
         sessionStorage.setItem('hlr_sol_v1',json);
@@ -1559,7 +1588,7 @@ function submitReq(){
     const cat=document.getElementById('ic-'+n)?.value;
     if(!desc){ toast('Preencha descrição de todos os itens.','error'); return; }
     items.push({desc,qty,cat,valorUnit:0,qtdRecebida:0,itemStatus:0,itemObs:''}); }
-  const req={id:'SOL-'+String(DB.nextId++).padStart(3,'0'),userId:CU.id,requester:name,date,type,status:0,
+  const req={id:newRequestId(),userId:CU.id,requester:name,date,type,status:0,
     justification:just,items,value:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sector:CU.sector||'',attendedBy:null,closure:null,activity:[],chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
     alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''},
@@ -4036,7 +4065,7 @@ function cancelCloseReq(){
 }
 
 // ── v3.3: versão + confirmação grande de recusa/cancelamento/reabertura ───
-const APP_VERSION='3.3 (15/10/2026)';
+const APP_VERSION='3.4 (16/10/2026)';
 document.addEventListener('DOMContentLoaded',function(){ const e=document.getElementById('appVer'); if(e) e.textContent=APP_VERSION; });
 (function(){ const e=document.getElementById('appVer'); if(e) e.textContent=APP_VERSION; })();
 
@@ -4076,12 +4105,34 @@ function saveWithBigResult(titleOk,detailOk,titleFail){
   });
 }
 
+// ── v3.4: numeração segura das solicitações + reparo de duplicadas ────────
+const APP_VERSION_34=true;
+function newRequestId(){
+  let max=0;
+  (DB.requests||[]).forEach(function(r){
+    const m=String(r.id).match(/^SOL-(\d+)/);
+    if(m) max=Math.max(max,parseInt(m[1],10));
+  });
+  const n=Math.max(max+1,DB.nextId||1);
+  DB.nextId=n+1;
+  return 'SOL-'+String(n).padStart(3,'0');
+}
+function flushIdRepair(){
+  if(!window.__idRepaired) return;
+  window.__idRepaired=false;
+  try{
+    saveDB();
+    toast('⚠ Havia solicitações com número repetido. Corrigi automaticamente (ex.: SOL-028-2).','warning');
+  }catch(e){ console.warn('flushIdRepair',e); }
+}
+
 // ── BOOT ──
 window.addEventListener('DOMContentLoaded',function(){
   // 1. Carregar dados locais como fallback
   const stored=sessionStorage.getItem('hlr_sol_v1');
   if(stored){ try{ const p=JSON.parse(stored); DB.users=p.users||DB.users; DB.requests=p.requests||DB.requests; DB.categories=p.categories||DB.categories; DB.nextId=p.nextId||DB.nextId; DB.statusLabels=p.statusLabels||DB.statusLabels; }catch(e){} }
   normalizeDB(DB);
+  flushIdRepair();
   // 2. Mostrar barra de status e iniciar conexão com GAS
   var gasBar=document.getElementById('gasStatusBar');
   if(gasBar) gasBar.style.display='flex';
