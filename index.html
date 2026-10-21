@@ -244,14 +244,6 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
 .pass-strength{height:4px;border-radius:2px;margin-top:5px;transition:all .3s;}
 
 
-/* ── SAVING ── */
-.saving-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:900;}
-.saving-pos{background:#d4f0de;color:#1a5530;border:1.5px solid var(--green);}
-.saving-neg{background:#fde8e8;color:#9b1c1a;border:1.5px solid var(--red);}
-.saving-neu{background:#f0f4f1;color:#5a7a60;border:1.5px solid #c8d8cc;}
-.saving-input-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
-.saving-input-row input,.saving-input-row select{background:#f5f8f5;border:1.5px solid #dce8de;border-radius:7px;padding:7px 10px;font-size:13px;font-family:'Nunito',sans-serif;color:#2c3e30;}
-.saving-input-row input:focus,.saving-input-row select:focus{outline:none;border-color:var(--green);}
 /* ── COTAÇÃO & APROVAÇÃO ── */
 .quote-tab-bar{display:flex;gap:2px;border-bottom:2px solid #dce8de;margin-bottom:16px;}
 .approver-opt{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:2px solid #dce8de;cursor:pointer;margin-bottom:9px;transition:all .2s;background:#fff;position:relative;}
@@ -538,10 +530,6 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
               <div id="byUserChart"></div>
             </div>
             <div class="chart-area" style="margin-top:16px;">
-              <div class="chart-title">&#128200; Saving por Solicita&ccedil;&atilde;o</div>
-              <div id="savingChart"></div>
-            </div>
-            <div class="chart-area" style="margin-top:16px;">
               <div class="chart-title">&#128100; Atendimentos por Respons&aacute;vel</div>
               <div id="byAttendantChart"></div>
             </div>
@@ -573,6 +561,11 @@ body{font-family:'Nunito',sans-serif;background:var(--bg-dark);color:#2c3e30;min
               <option value="NÃO URGENTE">&#128994; NÃO URGENTE</option>
             </select>
           </div>
+        </div>
+        <div id="bulkBar" style="display:none;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;">
+          <label class="cblabel"><input type="checkbox" id="selAllReq" onchange="selAllReqs(this.checked)"> Selecionar todas</label>
+          <button class="btn btn-danger btn-sm" id="btnDelSel" onclick="deleteSelectedReqs()" disabled>&#128465; Excluir selecionadas (0)</button>
+          <button class="btn btn-outline btn-sm" onclick="removeDuplicateReqs()">&#129529; Remover duplicadas</button>
         </div>
         <div id="adminReqList"></div>
       </div>
@@ -899,12 +892,15 @@ function dedupeRequestIds(d){
           || String(a.requester).localeCompare(String(b.requester));
     });
     for(let i=1;i<g.length;i++){
-      let n=i+1, nid;
-      do{ nid=id+'-'+n; n++; }while(used[nid]);
+      let nid='', ch=66;                       // B, C, D...
+      do{ nid=id+String.fromCharCode(ch); ch++; }while(used[nid] && ch<91);
+      if(used[nid]){ let n=i+1; do{ nid=id+'-'+n; n++; }while(used[nid]); }
       used[nid]=1;
+      const oldKey=id+'|'+(g[i].createdAt||'');
       g[i].renamedFrom=id; g[i].id=nid;
+      d.deletedRequests=(d.deletedRequests||[]).concat([{k:oldKey,at:new Date().toISOString()}]);   // a versão com o número antigo não volta
       if(!Array.isArray(g[i].activity)) g[i].activity=[];
-      g[i].activity.push({at:new Date().toISOString(),by:'Sistema',byId:null,type:'status',text:'Número duplicado corrigido: '+id+' → '+nid});
+      g[i].activity.push({at:new Date().toISOString(),by:'Sistema',byId:null,type:'status',text:'Número repetido corrigido: '+id+' → '+nid});
       changed=true;
     }
   });
@@ -916,7 +912,6 @@ function migrarRequisicoes(requests){
     if(!r.quote)       r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
     if(!r.alcada)      r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
     if(!r.attachments) r.attachments=[];
-    if(!r.saving)      r.saving={value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
     // Migrar itens: adicionar campos de status/valor/entrega por item
     (r.items||[]).forEach(function(it){
       if(it.valorUnit===undefined)   it.valorUnit=0;
@@ -1342,7 +1337,6 @@ function showDetail(reqId){
       return `<div class="cmsg ${mineSent?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${mineSent?'r':''}">${m.time} &bull; ${esc(m.by||(m.from==='user'?r.requester:'Setor Adm.'))}</div></div>`;
     }).join('')}</div>
     <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
-    ${(isMaster()&&r.status<9)?renderSavingBlock(r):''}
     ${canSeeQuoteFor(r)?renderQuoteTab(r):''}
     ${renderActivity(r)}
   `;
@@ -1354,12 +1348,6 @@ function showDetail(reqId){
   document.getElementById('detailModal').classList.remove('hidden');
   setTimeout(()=>{ const cm=document.getElementById('chatMsgs'); if(cm) cm.scrollTop=cm.scrollHeight; },50);
 }
-
-
-// ── SAVING ────────────────────────────────────────────────────────────────
-
-
-
 
 
 // ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
@@ -1485,8 +1473,7 @@ function submitReq(){
   const req={id:newRequestId(),userId:CU.id,requester:name,date,type,status:0,
     justification:just,items,value:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sector:CU.sector||'',attendedBy:null,closure:null,activity:[],chat:[],
     quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
-    alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''},
-    saving:{value:0,pct:0,obs:'',registeredBy:'',registeredAt:''}};
+    alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}};
   // Salvar arquivos anexados diretamente no request
   req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
   touchReq(req,'criada','Solicitação criada por '+name,{noAttend:true});
@@ -1639,21 +1626,7 @@ function emailUser(req,oldStatus,extra){
   });
 }
 // Aviso ao solicitante quando UM item é recusado/cancelado (e a solicitação continua aberta)
-function emailItem(r,idx,type,reason){
-  if(!GAS_URL) return;
-  const user=DB.users.find(function(u){ return u.id===r.userId; });
-  if(!user||!user.email){ toast('⚠ Solicitante sem e-mail cadastrado — aviso não enviado.','warning'); return; }
-  const it=(r.items||[])[idx]||{};
-  gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:r.id,
-    items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
-    oldStatus:'Item "'+(it.desc||'')+'"',newStatus:'Item '+(type==='recusada'?'recusado':'cancelado'),
-    reason:reason,event:'item',actor:CU?CU.name:'',
-    attendedBy:r.attendedBy?r.attendedBy.name:'',
-    date:new Date().toLocaleDateString('pt-BR')}
-  ).then(function(res){
-    if(!res || !res.success) toast('⚠ E-mail ao solicitante não enviado: '+(res&&res.error?res.error:'verifique o GAS'),'error');
-  });
-}
+
 function adminUpdate(reqId){
   if(!isAdmin()) return;
   const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
@@ -1805,96 +1778,6 @@ function forceSyncGAS(){
       toast('❌ Falha ao salvar: '+(res&&res.error||'erro desconhecido'),'error');
     }
   });
-}
-
-// ── SAVING ────────────────────────────────────────────────────────────────
-
-function renderSavingBlock(r){
-  if(!isMaster()) return '';
-  var sv = r.saving || {value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
-  var hasWinner = r.quote && r.quote.winnerId && r.quote.suppliers && r.quote.suppliers.length;
-  var winner = hasWinner ? r.quote.suppliers.find(function(s){ return s.id===r.quote.winnerId; }) : null;
-  var winnerVal = winner ? (winner.totalValue||0) : 0;
-  var reqVal = r.value||0;
-
-  var registered = sv.registeredAt ? true : false;
-
-  var html = '<hr style="border:none;border-top:1.5px solid #dce8de;margin:16px 0;">'
-    + '<div style="font-weight:800;font-size:12px;color:#5a7a60;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">💰 Saving da Solicitação</div>';
-
-  if(registered){
-    var isPos = sv.value > 0;
-    var isNeg = sv.value < 0;
-    html += '<div style="background:#f5f8f5;border-radius:10px;padding:14px;border:1.5px solid #dce8de;">'
-      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">'
-      + '<span class="saving-badge '+(isPos?'saving-pos':isNeg?'saving-neg':'saving-neu')+'">'
-      + (isPos?'📈 Economia':'📉 Acréscimo')+': R$ '+Math.abs(sv.value).toLocaleString('pt-BR',{minimumFractionDigits:2})
-      + '</span>'
-      + (sv.pct ? '<span style="font-size:13px;font-weight:900;color:'+(isPos?'var(--green)':'var(--red)')+';">'+(isPos?'-':'+')+''+Math.abs(sv.pct)+'%</span>' : '')
-      + '</div>'
-      + (sv.obs ? '<div style="font-size:12.5px;color:#5a7a60;margin-bottom:6px;">'+sv.obs+'</div>' : '')
-      + '<div style="font-size:11px;color:#7a9a80;">Registrado por <strong>'+sv.registeredBy+'</strong> em '+sv.registeredAt+'</div>'
-      + '<button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="editSaving(\'' + r.id + '\')">✏️ Editar</button>'
-      + '</div>';
-  } else {
-    // Sugerir saving automático se tiver vencedor e valor estimado
-    var suggestedSaving = (reqVal > 0 && winnerVal > 0) ? (reqVal - winnerVal) : 0;
-    var suggestedPct = (reqVal > 0 && suggestedSaving !== 0) ? Math.round((suggestedSaving/reqVal)*100) : 0;
-
-    html += '<div id="savingForm_'+r.id+'" style="background:#f5f8f5;border-radius:10px;padding:14px;border:1.5px solid #dce8de;">'
-      + '<div style="font-size:13px;color:#5a7a60;margin-bottom:10px;">Registre a economia (ou acréscimo) gerada nesta solicitação.</div>'
-      + (suggestedSaving !== 0 ? '<div style="background:#e8f5ee;border:1px solid #b0d8c0;border-radius:7px;padding:8px 12px;font-size:12.5px;color:#1a5530;margin-bottom:10px;font-weight:700;">💡 Sugestão automática: R$ '+suggestedSaving.toLocaleString('pt-BR',{minimumFractionDigits:2})+' ('+suggestedPct+'%) com base no valor estimado vs fornecedor vencedor.</div>' : '')
-      + '<div class="saving-input-row">'
-      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Tipo</label>'
-      + '<select id="savingType_'+r.id+'" onchange="updateSavingCalc(this.dataset.rid)" data-rid="'+r.id+'"  >'
-      + '<option value="economia">Economia (saving)</option>'
-      + '<option value="acrescimo">Acréscimo (negativo)</option>'
-      + '</select></div>'
-      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Valor R$</label>'
-      + '<input id="savingVal_'+r.id+'" type="number" min="0" step="0.01" placeholder="0,00" value="'+(suggestedSaving>0?suggestedSaving.toFixed(2):'') +'" oninput="updateSavingCalc(this.dataset.rid)" data-rid="'+r.id+'" style="width:130px;"></div>'
-      + '<div><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">% sobre estimado</label>'
-      + '<input id="savingPct_'+r.id+'" type="number" min="0" max="100" step="0.1" placeholder="%" value="'+(suggestedPct>0?suggestedPct:'')+'" style="width:80px;" readonly style="background:#eee;"></div>'
-      + '</div>'
-      + '<div style="margin-top:8px;"><label style="font-size:11px;font-weight:800;color:#5a7a60;text-transform:uppercase;display:block;margin-bottom:3px;">Observação</label>'
-      + '<input id="savingObs_'+r.id+'" class="fc" placeholder="Ex: Negociação de desconto, prazo melhor..." style="font-size:13px;background:#fff;color:#2c3e30;border:1.5px solid #dce8de;"></div>'
-      + '<button class="btn btn-green btn-sm" style="margin-top:10px;" onclick="saveSaving(this.dataset.rid)" data-rid="'+r.id+'">💾 Registrar Saving</button>'
-      + '</div>';
-  }
-  return html;
-}
-
-function updateSavingCalc(reqId){
-  var r = DB.requests.find(function(x){ return x.id===reqId; });
-  if(!r) return;
-  var val = parseFloat(document.getElementById('savingVal_'+reqId)?.value)||0;
-  var reqVal = r.value||0;
-  var pct = reqVal>0 ? Math.round((val/reqVal)*100) : 0;
-  var pctEl = document.getElementById('savingPct_'+reqId);
-  if(pctEl) pctEl.value = pct||'';
-}
-
-function saveSaving(reqId){
-  if(!isMaster()){ toast('Somente Master pode registrar saving.','error'); return; }
-  var r = DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
-  var tipo = document.getElementById('savingType_'+reqId)?.value||'economia';
-  var val  = parseFloat(document.getElementById('savingVal_'+reqId)?.value)||0;
-  var pct  = parseFloat(document.getElementById('savingPct_'+reqId)?.value)||0;
-  var obs  = (document.getElementById('savingObs_'+reqId)?.value||'').trim();
-  if(!val){ toast('Informe o valor do saving.','error'); return; }
-  r.saving = {
-    value: tipo==='economia' ? val : -val,
-    pct:   tipo==='economia' ? pct : -pct,
-    obs:   obs,
-    registeredBy:  CU.name,
-    registeredAt:  new Date().toLocaleString('pt-BR')
-  };
-  touchReq(r,'saving','Saving registrado'); saveDB(); toast('Saving registrado!','success'); showDetail(reqId);
-}
-
-function editSaving(reqId){
-  var r = DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
-  r.saving = {value:0,pct:0,obs:'',registeredBy:'',registeredAt:''};
-  showDetail(reqId);
 }
 
 // ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
@@ -2371,8 +2254,6 @@ function renderAdminDash(){
   const pend  = all.filter(r=>r.status===0).length;
   const urg   = all.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8).length;
   const uPend = DB.users.filter(u=>u.status==='pending').length;
-  const totalSaving = all.reduce((acc,r)=>acc+(r.saving&&r.saving.value?r.saving.value:0),0);
-  const savingCount = all.filter(r=>r.saving&&r.saving.registeredAt).length;
 
   // ── KPI: Tempo médio até o 1º atendimento (criação → 1ª ação da equipe) ──
   const respTimes = all.map(r=>{
@@ -2391,7 +2272,6 @@ function renderAdminDash(){
   const emAlcada = all.filter(r=>r.alcada&&r.alcada.status==='pendente'&&r.status<9).length;
 
   // ── Stat cards ─────────────────────────────────────────
-  const sc = totalSaving>=0?'var(--green)':'var(--red)';
   let statsHtml = `
     <div class="stat-card"><span class="stat-icon">📋</span><div class="stat-lbl">Total Solicitações</div><div class="stat-val">${all.length}</div></div>
     <div class="stat-card yellow"><span class="stat-icon">⏳</span><div class="stat-lbl">Novas (Abertas)</div><div class="stat-val">${pend}</div></div>
@@ -2412,13 +2292,7 @@ function renderAdminDash(){
       <div class="stat-sub" style="font-size:10.5px;color:#6b8570;margin-top:2px;">${finTimes.length} finalizadas</div>
     </div>`;
   if(isMaster()){
-    statsHtml += `<div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-lbl">Usuários Pendentes</div><div class="stat-val">${uPend}</div></div>
-    <div class="stat-card" style="border-left-color:${sc};">
-      <span class="stat-icon">${totalSaving>=0?'📈':'📉'}</span>
-      <div class="stat-lbl">Total Saving</div>
-      <div class="stat-val" style="font-size:15px;color:${sc};">R$ ${Math.abs(totalSaving).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-      <div class="stat-sub" style="font-size:11px;color:#6b8570;margin-top:2px;">${savingCount} registrada(s)</div>
-    </div>`;
+    statsHtml += `<div class="stat-card yellow"><span class="stat-icon">👥</span><div class="stat-lbl">Usuários Pendentes</div><div class="stat-val">${uPend}</div></div>`;
   }
   document.getElementById('adminStats').innerHTML = statsHtml;
   renderAttendantChart(all);
@@ -2495,31 +2369,6 @@ function renderAdminDash(){
           <div style="width:${Math.round(v.value/mxVal*100)}%;background:linear-gradient(90deg,var(--green-md),var(--green));height:100%;border-radius:5px;min-width:4px;"></div>
         </div>
       </div>`).join('');
-
-  // ── Gráfico: saving por solicitação ───────────────────
-  const savEl=document.getElementById('savingChart');
-  if(savEl){
-    const savReqs=all.filter(r=>r.saving&&r.saving.registeredAt&&r.saving.value!==0)
-      .sort((a,b)=>Math.abs(b.saving.value)-Math.abs(a.saving.value)).slice(0,10);
-    if(!savReqs.length){
-      savEl.innerHTML='<div style="color:#7a9a80;font-size:13px;text-align:center;padding:16px;">Nenhum saving registrado ainda.</div>';
-    } else {
-      const mxSav=Math.max(...savReqs.map(r=>Math.abs(r.saving.value)));
-      savEl.innerHTML=savReqs.map(r=>{
-        const isPos=r.saving.value>0;
-        const pct=Math.round(Math.abs(r.saving.value)/mxSav*100);
-        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
-          <div style="width:65px;font-size:11px;font-weight:800;color:#5a7a60;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.id}</div>
-          <div style="width:100px;font-size:11px;font-weight:700;color:#2c3e30;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.requester}</div>
-          <div style="flex:1;background:#e8f0ea;border-radius:5px;height:22px;overflow:hidden;">
-            <div style="width:${pct}%;background:${isPos?'linear-gradient(90deg,var(--green-md),var(--green))':'linear-gradient(90deg,#e74c3c,var(--red))'};height:100%;border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:7px;min-width:55px;">
-              <span style="color:#fff;font-size:11px;font-weight:900;">${isPos?'':'- '}R$ ${Math.abs(r.saving.value).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-    }
-  }
 }
 
 
@@ -2540,10 +2389,13 @@ function renderAdminList(){
   if(onlyStale) reqs=reqs.filter(isStale);
   if(q) reqs=reqs.filter(function(r){ return (r.id+' '+r.requester+' '+r.items.map(function(i){ return i.desc; }).join(' ')).toLowerCase().indexOf(q)>=0; });
   const el=document.getElementById('adminReqList');
+  const bb=document.getElementById('bulkBar'); if(bb) bb.style.display=isMaster()?'flex':'none';
+  const sa=document.getElementById('selAllReq'); if(sa) sa.checked=false;
   if(!reqs.length){ el.innerHTML='<div class="card" style="text-align:center;padding:38px;color:#7a9a80;">Nenhuma solicitação.</div>'; return; }
   el.innerHTML=reqs.map(function(r){
     const stale=isStale(r), closed=r.status>=8;
     return '<div class="areq-row '+(r.type==='IMEDIATA'||r.type==='URGENTE'?'urg':'')+'">'
+    +(isMaster()?'<label style="display:flex;align-items:flex-start;padding:2px 8px 0 0;"><input type="checkbox" class="selReq" data-k="'+esc(r.id)+'|'+esc(r.createdAt||'')+'" onchange="updSel()" style="width:18px;height:18px;"></label>':'')
     +'<div style="flex:1;min-width:220px;">'
       +'<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:3px;"><strong style="font-size:12.5px;">'+r.id+'</strong>'+urgBadge(r.type)+' '+statusBadge(r.status)+' '+alcadaChip(r)+'</div>'
       +'<div style="font-size:13px;font-weight:700;">'+r.items.map(function(i){ return esc(i.desc); }).join(', ')+'</div>'
@@ -2978,7 +2830,7 @@ function alcadaChip(r){
 }
 
 // ── Registro de atividade (reseta o contador de "parada") ─────────────────
-// Toda ação dentro da solicitação chama touchReq: status, item, chat, cotação, alçada, saving...
+// Toda ação dentro da solicitação chama touchReq: status, item, chat, cotação, alçada...
 function touchReq(r,type,text,opts){
   opts=opts||{};
   const now=new Date().toISOString();
@@ -3118,11 +2970,10 @@ function confirmCloseReq(){
   closeModal('closeReqModal');
   if(!r) return;
   if(ctx.idx!==null){
-    const old=r.status;
-    setItemStatus(r,ctx.idx,ctx.type==='recusada'?4:3,reason);
+    const itx=(r.items||[])[ctx.idx]; const oldSt=itx?(itx.itemStatus||0):0; const newSt=ctx.type==='recusada'?4:3;
+    setItemStatus(r,ctx.idx,newSt,reason);
     saveDB();
-    if(r.status!==old) emailUser(r,old,{reason:reason});
-    else emailItem(r,ctx.idx,ctx.type,reason);
+    emailItemStatus(r,ctx.idx,oldSt,newSt,reason);
     toast('Item '+(ctx.type==='recusada'?'recusado':'cancelado')+'.','warning');
   } else {
     try{
@@ -3235,10 +3086,11 @@ function setItemField(r,idx,field,value){
 function updateItemField(reqId,idx,field,value){
   if(!isAdmin()) return;
   const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
-  const old=r.status;
+  const it=(r.items||[])[idx]; if(!it) return;
+  const oldSt=it.itemStatus||0;
   if(setItemField(r,idx,field,value)){
     saveDB();
-    if(r.status!==old) emailUser(r,old);
+    if((it.itemStatus||0)!==oldSt) emailItemStatus(r,idx,oldSt,it.itemStatus||0);   // o item mudou de status (ex.: recebido)
     refreshAll(reqId);
   }
 }
@@ -3246,10 +3098,11 @@ function updateItemStatus(reqId,idx,ns){
   if(!isAdmin()) return;
   const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r) return;
   if(ns===3||ns===4){ refreshAll(reqId); openCloseModal(reqId,ns===4?'recusada':'cancelada',idx); return; }
-  const old=r.status;
+  const it=(r.items||[])[idx]; if(!it) return;
+  const oldSt=it.itemStatus||0;
   if(setItemStatus(r,idx,ns)){
     saveDB();
-    if(r.status!==old) emailUser(r,old);
+    emailItemStatus(r,idx,oldSt,ns);
     refreshAll(reqId);
   }
 }
@@ -3436,7 +3289,7 @@ function detailActions(r){
   }
   return h;
 }
-const ACT_ICONS={criada:'🆕',status:'🔄',chat:'💬',item:'📦',valor:'💲',alcada:'🔐',orcamento:'📎',saving:'💰',atendente:'👤'};
+const ACT_ICONS={criada:'🆕',status:'🔄',chat:'💬',item:'📦',valor:'💲',alcada:'🔐',orcamento:'📎',atendente:'👤'};
 function renderActivity(r){
   const list=(r.activity||[]).slice().reverse();
   return '<details style="margin-top:14px;background:#f5f8f5;border:1.5px solid #dce8de;border-radius:10px;padding:10px 14px;color:#2c3e30;">'
@@ -3933,7 +3786,7 @@ function cancelCloseReq(){
 }
 
 // ── v3.3: versão + confirmação grande de recusa/cancelamento/reabertura ───
-const APP_VERSION='4.0 (16/10/2026)';
+const APP_VERSION='4.2 (19/10/2026)';
 document.addEventListener('DOMContentLoaded',function(){ const e=document.getElementById('appVer'); if(e) e.textContent=APP_VERSION; });
 (function(){ const e=document.getElementById('appVer'); if(e) e.textContent=APP_VERSION; })();
 
@@ -4042,6 +3895,27 @@ function dbMerge(a,b){
   Object.keys(b).forEach(function(k){ out[k]=b[k]; });
   out.users=mergeList(a.users,b.users,uKey,tu);
   out.requests=mergeList(a.requests,b.requests,rKey,tr);
+  // Cópias IDÊNTICAS da mesma solicitação (mesma data/hora de criação, mesmo requisitante, mesmos itens)
+  // nunca são pedidos diferentes: mantém só uma e registra a exclusão das demais (impede a multiplicação).
+  var sig=function(r){
+    return [r.createdAt||'',r.userId,r.requester,String(r.justification||''),
+      (r.items||[]).map(function(i){ return i.desc+'|'+i.qty; }).join(';')].join('#');
+  };
+  var rank=function(r){ return /-\d+$/.test(String(r.id))?2:(r.renamedFrom?0:1); };
+  var groups={};
+  out.requests.forEach(function(r){ if(!r.createdAt) return; (groups[sig(r)]=groups[sig(r)]||[]).push(r); });
+  var drop={}, nDrop=0;
+  Object.keys(groups).forEach(function(k){
+    var g=groups[k]; if(g.length<2) return;
+    g.sort(function(x,y){ return rank(x)-rank(y) || String(x.id).localeCompare(String(y.id)); });
+    for(var i=1;i<g.length;i++){ drop[rKey(g[i])]=1; nDrop++; }
+  });
+  if(nDrop){
+    var nowIso=new Date().toISOString();
+    out.requests=out.requests.filter(function(r){ return !drop[rKey(r)]; });
+    Object.keys(drop).forEach(function(k){ tr[k]=nowIso; });
+    needsA=true; needsB=true;
+  }
   var pick=(String(a._savedAt||'')>String(b._savedAt||''))?a:b;
   if(pick.categories||a.categories||b.categories) out.categories=pick.categories||a.categories||b.categories;
   if(pick.statusLabels||a.statusLabels||b.statusLabels) out.statusLabels=pick.statusLabels||a.statusLabels||b.statusLabels;
@@ -4280,6 +4154,68 @@ function importBackup(inp){
     inp.value='';
   };
   fr.readAsText(f);
+}
+
+// ── E-mail ao solicitante com o status DO ITEM (não do pedido) ───────────
+function emailItemStatus(r,idx,oldSt,newSt,reason){
+  if(!GAS_URL) return;
+  const user=DB.users.find(function(u){ return u.id===r.userId; });
+  if(!user||!user.email){ toast('⚠ Solicitante sem e-mail cadastrado — aviso do item não enviado.','warning'); return; }
+  const it=(r.items||[])[idx]||{};
+  gasPost({action:'sendStatusEmail',to:user.email,userName:user.name,reqId:r.id,
+    items:'Item: '+(it.desc||'')+' (solicitado '+(it.qty||0)+' • atendido '+(it.qtdRecebida||0)+')',
+    oldStatus:ITEM_STATUS_LABELS[oldSt]||'—',newStatus:ITEM_STATUS_LABELS[newSt]||'—',
+    reason:reason||'',event:(newSt===3||newSt===4)?'item':'item_status',actor:CU?CU.name:'',
+    attendedBy:r.attendedBy?r.attendedBy.name:'',
+    date:new Date().toLocaleDateString('pt-BR')
+  }).then(function(res){
+    if(!(res&&res.success)) toast('⚠ E-mail do item não enviado ao solicitante: '+((res&&res.error)||'verifique o GAS'),'error');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  v4.2 — EXCLUSÃO EM MASSA e remoção de cópias idênticas (Master)
+// ═══════════════════════════════════════════════════════════════════════════
+function reqKey(r){ return r.id+'|'+(r.createdAt||''); }
+function updSel(){
+  const n=document.querySelectorAll('.selReq:checked').length;
+  const b=document.getElementById('btnDelSel');
+  if(b){ b.disabled=!n; b.textContent='🗑 Excluir selecionadas ('+n+')'; }
+}
+function selAllReqs(on){ document.querySelectorAll('.selReq').forEach(function(c){ c.checked=on; }); updSel(); }
+function deleteReqsByKeys(keys){
+  if(!isMaster()){ toast('Somente o Master exclui solicitações.','error'); return; }
+  const set={}; keys.forEach(function(k){ set[k]=1; });
+  const del=DB.requests.filter(function(r){ return set[reqKey(r)]; });
+  if(!del.length){ toast('Nada para excluir.','warning'); return; }
+  del.forEach(addReqTomb);   // exclusão registrada: nenhum aparelho antigo consegue "ressuscitar"
+  DB.requests=DB.requests.filter(function(r){ return !set[reqKey(r)]; });
+  saveWithBigResult(del.length+' solicitação(ões) excluída(s)','Exclusão gravada no banco de dados.','Exclusão NÃO gravada no banco');
+  refreshAll();
+}
+function deleteSelectedReqs(){
+  const keys=Array.prototype.map.call(document.querySelectorAll('.selReq:checked'),function(c){ return c.getAttribute('data-k'); });
+  if(!keys.length) return;
+  if(!confirm('Excluir '+keys.length+' solicitação(ões)?\n\nEsta ação não pode ser desfeita.')) return;
+  deleteReqsByKeys(keys);
+}
+function findDuplicateReqs(){
+  const sig=function(r){ return [r.createdAt||'',r.userId,r.requester,String(r.justification||''),(r.items||[]).map(function(i){ return i.desc+'|'+i.qty; }).join(';')].join('#'); };
+  const rank=function(r){ return /-\d+$/.test(String(r.id))?2:(r.renamedFrom?0:1); };
+  const g={}; DB.requests.forEach(function(r){ if(!r.createdAt) return; (g[sig(r)]=g[sig(r)]||[]).push(r); });
+  const del=[];
+  Object.keys(g).forEach(function(k){
+    const a=g[k]; if(a.length<2) return;
+    a.sort(function(x,y){ return rank(x)-rank(y)||String(x.id).localeCompare(String(y.id)); });
+    a.slice(1).forEach(function(r){ del.push(reqKey(r)); });
+  });
+  return del;
+}
+function removeDuplicateReqs(){
+  const keys=findDuplicateReqs();
+  if(!keys.length){ toast('Nenhuma solicitação duplicada encontrada. ✅','success'); return; }
+  if(!confirm('Encontrei '+keys.length+' cópia(s) idêntica(s).\n\nManter só uma de cada e excluir as demais?')) return;
+  deleteReqsByKeys(keys);
 }
 
 // ── BOOT ──
