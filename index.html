@@ -793,6 +793,53 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
   .topbar{margin:0;padding:0 14px;height:60px;}
   .page-content{padding:16px 12px 40px;}
 }
+
+/* ═══ ABA CHAT ═══ */
+.cp-wrap{display:grid;grid-template-columns:340px 1fr;gap:16px;height:calc(100vh - 150px);min-height:480px;}
+.cp-side,.cp-main{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:0;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.cp-side-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 14px 8px;}
+.cp-title{font-family:'Nunito',sans-serif;font-weight:900;font-size:15px;color:var(--ink);}
+.cp-side>.fc{margin:0 14px 10px;width:auto;}
+.cp-list{flex:1;overflow-y:auto;border-top:1px solid var(--line);}
+.cp-item{display:block;padding:11px 14px;border-bottom:1px solid var(--line);border-left:3px solid transparent;cursor:pointer;transition:background .15s;}
+.cp-item:hover{background:var(--field);}
+.cp-item.active{background:var(--t-ok);border-left-color:var(--mint);}
+.cp-row1{display:flex;align-items:center;gap:8px;}
+.cp-id{font-weight:900;font-size:13px;color:var(--ink);font-family:'Nunito',sans-serif;}
+.cp-time{margin-left:auto;font-size:11px;color:var(--ink-3);white-space:nowrap;}
+.cp-items{font-size:12px;color:var(--ink-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cp-prev{font-size:12px;color:var(--ink-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cp-unread{background:var(--mint);color:#fff;border-radius:999px;font-size:10.5px;font-weight:800;padding:1px 7px;}
+.cp-item.has-unread .cp-prev{color:var(--ink);font-weight:700;}
+.cp-none{padding:26px 16px;text-align:center;color:var(--ink-3);font-size:13px;line-height:1.6;}
+.cp-empty{margin:auto;text-align:center;color:var(--ink-3);font-size:14px;padding:30px;line-height:1.7;}
+.cp-empty .big{font-size:42px;margin-bottom:6px;}
+.cp-thread{display:flex;flex-direction:column;flex:1;min-height:0;}
+.cp-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--field);}
+.cp-head .info{flex:1;min-width:180px;}
+.cp-head .t1{font-weight:900;font-size:14px;color:var(--ink);display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.cp-head .t2{font-size:12px;color:var(--ink-2);margin-top:2px;}
+.cp-back{display:none;}
+.cp-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.cp-msg{max-width:72%;}
+.cp-msg.sent{align-self:flex-end;} .cp-msg.recv{align-self:flex-start;}
+.cp-bub{padding:9px 14px;border-radius:14px;font-size:13.5px;line-height:1.5;word-break:break-word;white-space:pre-wrap;}
+.cp-msg.sent .cp-bub{background:linear-gradient(180deg,#14b183,#0c8f64);color:#fff;border-bottom-right-radius:4px;}
+.cp-msg.recv .cp-bub{background:var(--field-2);color:var(--ink);border:1px solid var(--line-2);border-bottom-left-radius:4px;}
+.cp-meta{font-size:10.5px;color:var(--ink-3);margin-top:3px;}
+.cp-msg.sent .cp-meta{text-align:right;}
+.cp-day{align-self:center;font-size:11px;color:var(--ink-3);background:var(--field);border:1px solid var(--line);border-radius:999px;padding:2px 12px;}
+.cp-input-row{display:flex;border-top:1px solid var(--line);}
+.cp-input-row input{flex:1;border:none;padding:14px 16px;font-size:14px;font-family:'Nunito',sans-serif;background:transparent;color:var(--ink);}
+.cp-input-row input:focus{outline:none;}
+.cp-input-row .chat-send{padding:0 22px;}
+.cn-item{padding:10px 12px;border:1px solid var(--line);border-radius:11px;margin-bottom:8px;cursor:pointer;background:var(--field);transition:border-color .15s,background .15s;}
+.cn-item:hover{border-color:var(--mint);background:var(--t-ok);}
+@media(max-width:900px){
+  .cp-wrap{grid-template-columns:1fr;height:calc(100vh - 120px);}
+  .cp-wrap .cp-main{display:none;} .cp-wrap.cp-open .cp-side{display:none;} .cp-wrap.cp-open .cp-main{display:flex;}
+  .cp-back{display:inline-flex;} .cp-msg{max-width:88%;}
+}
 @media print{.vn-bg{display:none!important;}}
 </style>
 </head>
@@ -1122,6 +1169,24 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
         <div id="aprovacoesList"></div>
       </div>
 
+      <div class="section" id="sec-chat">
+        <div class="cp-wrap" id="cpWrap">
+          <div class="cp-side">
+            <div class="cp-side-h"><div class="cp-title">💬 Conversas</div><button class="btn btn-green btn-sm" onclick="openChatNew()">＋ Nova conversa</button></div>
+            <input id="cpSearch" class="fc" placeholder="Buscar por nº, item ou solicitante..." oninput="renderChatList()">
+            <div class="cp-list" id="cpList"></div>
+          </div>
+          <div class="cp-main">
+            <div class="cp-empty" id="cpEmpty"><div class="big">💬</div>Selecione uma conversa ao lado<br>ou inicie uma nova escolhendo a solicitação.</div>
+            <div class="cp-thread" id="cpThread" style="display:none;">
+              <div class="cp-head" id="cpHead"></div>
+              <div class="cp-msgs" id="cpMsgs"></div>
+              <div class="cp-input-row"><input id="cpIn" placeholder="Escreva uma mensagem..." autocomplete="off" onkeydown="if(event.key==='Enter')sendChatPage()"><button class="chat-send" onclick="sendChatPage()">&#9658;</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ADMIN USUÁRIOS (Somente Master) -->
       <div class="section" id="sec-admin-users">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
@@ -1194,6 +1259,17 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="chatNewModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="mhdr"><h3>💬 Nova conversa</h3></div>
+    <div class="mbody" style="color:var(--ink);">
+      <div style="font-size:13px;color:var(--ink-2);margin-bottom:10px;">Escolha <strong>de qual solicitação</strong> você quer conversar. As mensagens também aparecerão no chat dentro da solicitação.</div>
+      <input id="cnSearch" class="fc" placeholder="Buscar por nº, item ou solicitante..." oninput="renderChatNewList()" style="margin-bottom:10px;">
+      <div id="cnList" style="max-height:380px;overflow-y:auto;"></div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;"><button class="btn btn-outline btn-sm" onclick="closeModal('chatNewModal')">Cancelar</button></div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="approverModal">
   <div class="modal" style="max-width:480px;">
     <div class="mhdr" style="background:linear-gradient(135deg,#d4ac0d,#f1c40f);">
@@ -1417,7 +1493,6 @@ function dedupeRequestIds(d){
 
 function migrarRequisicoes(requests){
   (requests||[]).forEach(function(r){
-    if(!r.quote)       r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
     if(!r.alcada)      r.alcada={requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
     if(!r.attachments) r.attachments=[];
     // Migrar itens: adicionar campos de status/valor/entrega por item
@@ -1703,11 +1778,13 @@ function buildNav(){
   const pc=DB.users.filter(function(u){ return u.status==='pending'; }).length;
   const pd='<span class="nbadge" id="navPD" style="'+(pc>0?'':'display:none')+'">'+pc+'</span>';
   const ap='<span class="nbadge" id="navAP" style="display:none">0</span>';
+  const chat='<div class="nav-item" onclick="navigate(\'chat\')" data-s="chat"><span class="nav-icon">💬</span> Chat '+'<span class="nbadge" id="navCH" style="display:none">0</span>'+'</div>';
   const aprov='<div class="nav-item" onclick="navigate(\'aprovacoes\')" data-s="aprovacoes"><span class="nav-icon">🔐</span> Aprovações '+ap+'</div>';
   if(isAdmin()||isDirecao()){
     nav.innerHTML='<div class="nav-sec">Administração</div>'
       +'<div class="nav-item" onclick="navigate(\'admin-dash\')" data-s="admin-dash"><span class="nav-icon">🏠</span> Dashboard</div>'
       +'<div class="nav-item" onclick="navigate(\'admin-gestao\')" data-s="admin-gestao"><span class="nav-icon">📋</span> Gerenciar Solicitações</div>'
+      +chat
       +'<div class="nav-item" onclick="navigate(\'admin-itens\')" data-s="admin-itens"><span class="nav-icon">📦</span> Gerenciar Itens</div>'
       +'<div class="nav-item" onclick="navigate(\'relatorios\')" data-s="relatorios"><span class="nav-icon">📊</span> Relatórios</div>'
       +aprov
@@ -1718,6 +1795,7 @@ function buildNav(){
       +'<div class="nav-item" onclick="navigate(\'dashboard\')" data-s="dashboard"><span class="nav-icon">🏠</span> Dashboard</div>'
       +'<div class="nav-item" onclick="navigate(\'nova\')" data-s="nova"><span class="nav-icon">✏️</span> Nova Solicitação</div>'
       +'<div class="nav-item" onclick="navigate(\'minhas\')" data-s="minhas"><span class="nav-icon">📄</span> Minhas Solicitações</div>'
+      +chat
       +aprov;
   }
   updateNotifBadge();
@@ -1730,7 +1808,7 @@ function navigate(sec){
   const ni=document.querySelector('[data-s="'+sec+'"]'); if(ni) ni.classList.add('active');
   const titles={dashboard:'Dashboard',nova:'Nova Solicitação',minhas:'Minhas Solicitações',
     'admin-dash':'Dashboard Administrativo','admin-gestao':'Gerenciar Solicitações','admin-itens':'Gerenciar Itens',relatorios:'Relatórios',
-    aprovacoes:'Aprovações de Alçada','admin-users':'Gerenciar Usuários','admin-cat':'Categorias'};
+    aprovacoes:'Aprovações de Alçada',chat:'Chat','admin-users':'Gerenciar Usuários','admin-cat':'Categorias'};
   document.getElementById('tbarTitle').textContent=titles[sec]||sec; vnTopSub(); vnMenu(false);
   updateNotifBadge();
   const pd=document.getElementById('navPD');
@@ -1743,6 +1821,7 @@ function navigate(sec){
   if(sec==='admin-itens'){ buildItemFilters(); renderAdminItems(); }
   if(sec==='relatorios'){ buildReportFilters(); renderReport(); }
   if(sec==='aprovacoes') renderAprovacoes();
+  if(sec==='chat') renderChatPage();
   if(sec==='admin-users') renderUsersPage();
   if(sec==='admin-cat') renderCats();
 }
@@ -1759,6 +1838,7 @@ function navigate(sec){
 function showDetail(reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
   if(!canViewReq(r)){ toast('Sem permissão para ver esta solicitação.','error'); return; }
+  cpMarkRead(reqId);
   _detailOpenId=reqId;
   const canAdmin=isAdmin();
   document.getElementById('detailTitle').textContent='Detalhes — '+r.id;
@@ -1843,17 +1923,13 @@ function showDetail(reqId){
     <div class="chat-box"><div class="chat-msgs" id="chatMsgs">${(r.chat||[]).map(m=>{
       const iAmAdminSide=isAdmin()||isMaster()||isDirecao();
       const mineSent=(iAmAdminSide&&m.from==='admin')||(!iAmAdminSide&&m.from==='user');
-      return `<div class="cmsg ${mineSent?'sent':'recv'}"><div class="cbubble">${m.msg}</div><div class="ctime ${mineSent?'r':''}">${m.time} &bull; ${esc(m.by||(m.from==='user'?r.requester:'Setor Adm.'))}</div></div>`;
+      return `<div class="cmsg ${mineSent?'sent':'recv'}"><div class="cbubble">${esc(m.msg)}</div><div class="ctime ${mineSent?'r':''}">${m.time} &bull; ${esc(m.by||(m.from==='user'?r.requester:'Setor Adm.'))}</div></div>`;
     }).join('')}</div>
     <div class="chat-input-row"><input id="chatIn" placeholder="Escreva uma mensagem..." onkeydown="if(event.key==='Enter') sendChat('${r.id}')"><button class="chat-send" onclick="sendChat('${r.id}')">&#9658;</button></div></div></div>
     ${canSeeQuoteFor(r)?renderQuoteTab(r):''}
     ${renderActivity(r)}
   `;
   // Aprovador designado com decisão pendente já abre direto na aba de alçada
-  if(r.alcada&&r.alcada.status==='pendente'&&String(r.alcada.approverId)===String(CU.id)){
-    const _b=document.querySelector('#detailBody .quote-tab:nth-child(3)');
-    if(_b) switchQuoteTab(_b,'qt-alcada');
-  }
   document.getElementById('detailModal').classList.remove('hidden');
   setTimeout(()=>{ const cm=document.getElementById('chatMsgs'); if(cm) cm.scrollTop=cm.scrollHeight; },50);
 }
@@ -1981,7 +2057,6 @@ function submitReq(){
     items.push({desc,qty,cat,valorUnit:0,qtdRecebida:0,itemStatus:0,itemObs:''}); }
   const req={id:newRequestId(),userId:CU.id,requester:name,date,type,status:0,
     justification:just,items,value:0,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sector:CU.sector||'',attendedBy:null,closure:null,activity:[],chat:[],
-    quote:{suppliers:[],buyerAnalysis:'',winnerId:'',files:[]},
     alcada:{requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''}};
   // Salvar arquivos anexados diretamente no request
   req.attachments = attachedFiles.map(f=>({id:f.id,name:f.name,type:f.type,size:f.size,data:f.data}));
@@ -2103,17 +2178,144 @@ function previewAttachment(fileId, reqId){
   }
 }
 
-function sendChat(reqId){
-  const inp=document.getElementById('chatIn'); if(!inp||!inp.value.trim()) return;
-  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r||!canViewReq(r)) return;
+// Grava uma mensagem no chat da solicitação (a mesma lista usada na aba Chat e dentro da solicitação)
+function postChat(r,msg){
   if(!Array.isArray(r.chat)) r.chat=[];
   const now=new Date(); const t=now.toLocaleDateString('pt-BR')+' '+now.toTimeString().slice(0,5);
   const fromVal=(isAdmin()||isMaster()||isDirecao())?'admin':'user';
-  const msg=inp.value.trim();
-  r.chat.push({from:fromVal,msg:msg,time:t,by:CU.name});
+  r.chat.push({from:fromVal,msg:msg,time:t,by:CU.name,byId:CU.id,at:now.toISOString()});
   touchReq(r,'chat',(fromVal==='admin'?'Mensagem do setor de Compras: ':'Mensagem do requisitante: ')+(msg.length>70?msg.slice(0,70)+'…':msg));
-  inp.value=''; saveDB(); showDetail(reqId); toast('Mensagem enviada.','success');
+  cpMarkRead(r.id); saveDB(); updateChatBadge();
 }
+function sendChat(reqId){
+  const inp=document.getElementById('chatIn'); if(!inp||!inp.value.trim()) return;
+  const r=DB.requests.find(function(x){ return x.id===reqId; }); if(!r||!canViewReq(r)) return;
+  postChat(r,inp.value.trim());
+  inp.value=''; showDetail(reqId); toast('Mensagem enviada.','success');
+  const sc=document.getElementById('sec-chat'); if(sc&&sc.classList.contains('active')) renderChatPage(true);
+}
+
+// ═══ ABA CHAT ═══════════════════════════════════════════════════════════════
+var _cpOpen=null;
+function cpKey(){ return 'hlr_chatread_'+(CU?CU.id:'x'); }
+function cpReadMap(){
+  let m=null; try{ m=JSON.parse(localStorage.getItem(cpKey())||'null'); }catch(e){}
+  if(!m||typeof m!=='object'){ m={__init:new Date().toISOString()}; try{ localStorage.setItem(cpKey(),JSON.stringify(m)); }catch(e){} }
+  return m;
+}
+function cpMarkRead(reqId){
+  if(!CU) return;
+  const m=cpReadMap(); m[reqId]=new Date().toISOString();
+  try{ localStorage.setItem(cpKey(),JSON.stringify(m)); }catch(e){}
+}
+function cpMsgTs(m){
+  if(m&&m.at){ const t=new Date(m.at).getTime(); if(!isNaN(t)) return t; }
+  const d=m?parseBRDT(m.time):null; return d?d.getTime():0;
+}
+function cpIsMine(m){
+  if(m.byId!=null && m.byId!=='') return String(m.byId)===String(CU.id);
+  if(m.by) return m.by===CU.name;
+  const adm=isAdmin()||isMaster()||isDirecao();
+  return adm ? m.from==='admin' : m.from==='user';
+}
+function cpUnread(r){
+  const m=cpReadMap(); const last=new Date(m[r.id]||m.__init).getTime()||0;
+  return (r.chat||[]).filter(function(x){ return x && !cpIsMine(x) && cpMsgTs(x)>last; }).length;
+}
+function cpConvs(){
+  const q=((document.getElementById('cpSearch')||{}).value||'').trim().toLowerCase();
+  return DB.requests.filter(function(r){ return canViewReq(r) && (r.chat||[]).length; })
+    .filter(function(r){ return !q || cpHay(r).indexOf(q)>=0; })
+    .map(function(r){ const last=r.chat[r.chat.length-1]; return {r:r,last:last,ts:cpMsgTs(last)||new Date(r.updatedAt||r.createdAt||0).getTime(),unread:cpUnread(r)}; })
+    .sort(function(a,b){ return b.ts-a.ts; });
+}
+function cpHay(r){ return (r.id+' '+(r.requester||'')+' '+(r.sector||'')+' '+(r.items||[]).map(function(i){ return i.desc; }).join(' ')).toLowerCase(); }
+function cpItemsTxt(r){ return (r.items||[]).map(function(i){ return i.desc+' ×'+i.qty; }).join(', ')||'—'; }
+function cpFmt(ts){
+  if(!ts) return ''; const d=new Date(ts), n=new Date();
+  if(d.toDateString()===n.toDateString()) return d.toTimeString().slice(0,5);
+  return d.toLocaleDateString('pt-BR').slice(0,5);
+}
+function updateChatBadge(){
+  const nb=document.getElementById('navCH'); if(!nb||!CU) return;
+  let n=0; DB.requests.forEach(function(r){ if(canViewReq(r)&&(r.chat||[]).length) n+=cpUnread(r); });
+  nb.textContent=n>99?'99+':n; nb.style.display=n>0?'inline':'none';
+}
+function renderChatList(){
+  const el=document.getElementById('cpList'); if(!el) return;
+  const cv=cpConvs();
+  if(!cv.length){
+    const q=((document.getElementById('cpSearch')||{}).value||'').trim();
+    el.innerHTML='<div class="cp-none">'+(q?'Nenhuma conversa encontrada.':'Nenhuma conversa ainda.<br>Clique em <strong>＋ Nova conversa</strong> e escolha a solicitação.')+'</div>'; return;
+  }
+  el.innerHTML=cv.slice(0,80).map(function(c){
+    const r=c.r, who=c.last.by||(c.last.from==='user'?r.requester:'Compras');
+    return '<div class="cp-item'+(r.id===_cpOpen?' active':'')+(c.unread?' has-unread':'')+'" data-rid="'+esc(r.id)+'" onclick="openChat(this.dataset.rid)">'
+      +'<div class="cp-row1"><span class="cp-id">'+esc(r.id)+'</span>'+statusBadge(r.status)+(c.unread?'<span class="cp-unread">'+c.unread+'</span>':'')+'<span class="cp-time">'+cpFmt(c.ts)+'</span></div>'
+      +'<div class="cp-items">'+esc(cpItemsTxt(r))+'</div>'
+      +'<div class="cp-prev">'+esc(who)+': '+esc(c.last.msg)+'</div></div>';
+  }).join('');
+}
+function renderChatThread(keepScroll){
+  const r=_cpOpen&&DB.requests.find(function(x){ return x.id===_cpOpen; });
+  const emp=document.getElementById('cpEmpty'), th=document.getElementById('cpThread'), wrap=document.getElementById('cpWrap');
+  if(!r||!canViewReq(r)){ _cpOpen=null; if(emp) emp.style.display=''; if(th) th.style.display='none'; if(wrap) wrap.classList.remove('cp-open'); return; }
+  emp.style.display='none'; th.style.display='flex'; wrap.classList.add('cp-open');
+  document.getElementById('cpHead').innerHTML=
+    '<button class="btn btn-outline btn-sm cp-back" onclick="cpBack()">← Conversas</button>'
+    +'<div class="info"><div class="t1">'+esc(r.id)+' '+statusBadge(r.status)+'</div>'
+    +'<div class="t2">'+esc(r.requester||'')+(reqSector(r)?' • '+esc(reqSector(r)):'')+' • '+esc(cpItemsTxt(r))+'</div></div>'
+    +'<button class="btn btn-outline btn-sm" data-rid="'+esc(r.id)+'" onclick="showDetail(this.dataset.rid)">Abrir solicitação</button>';
+  const box=document.getElementById('cpMsgs');
+  const atBottom=box.scrollTop+box.clientHeight>=box.scrollHeight-40;
+  let html='', lastDay='';
+  (r.chat||[]).forEach(function(m){
+    const ts=cpMsgTs(m), day=ts?new Date(ts).toLocaleDateString('pt-BR'):((m.time||'').split(' ')[0]||'');
+    if(day&&day!==lastDay){ html+='<div class="cp-day">'+esc(day)+'</div>'; lastDay=day; }
+    const mine=cpIsMine(m);
+    html+='<div class="cp-msg '+(mine?'sent':'recv')+'"><div class="cp-bub">'+esc(m.msg)+'</div>'
+      +'<div class="cp-meta">'+esc(m.by||(m.from==='user'?r.requester:'Setor Adm.'))+' • '+esc(ts?new Date(ts).toTimeString().slice(0,5):((m.time||'').split(' ')[1]||''))+'</div></div>';
+  });
+  if(!html) html='<div class="cp-none">Nenhuma mensagem ainda.<br>Escreva a primeira abaixo.</div>';
+  box.innerHTML=html;
+  if(!keepScroll||atBottom) box.scrollTop=box.scrollHeight;
+}
+function renderChatPage(keep){
+  renderChatList(); renderChatThread(!!keep); updateChatBadge();
+}
+function openChat(reqId){
+  const r=DB.requests.find(function(x){ return x.id===reqId; });
+  if(!r||!canViewReq(r)){ toast('Sem permissão para esta solicitação.','error'); return; }
+  _cpOpen=reqId; cpMarkRead(reqId); renderChatPage();
+  const i=document.getElementById('cpIn'); if(i){ i.value=''; i.focus(); }
+}
+function cpBack(){ _cpOpen=null; renderChatPage(); }
+function sendChatPage(){
+  const inp=document.getElementById('cpIn'); if(!inp||!inp.value.trim()) return;
+  const r=DB.requests.find(function(x){ return x.id===_cpOpen; }); if(!r||!canViewReq(r)) return;
+  postChat(r,inp.value.trim()); inp.value=''; renderChatPage(); inp.focus();
+}
+function openChatNew(){
+  document.getElementById('cnSearch').value='';
+  renderChatNewList();
+  document.getElementById('chatNewModal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('cnSearch').focus(); },60);
+}
+function renderChatNewList(){
+  const q=(document.getElementById('cnSearch').value||'').trim().toLowerCase();
+  const list=DB.requests.filter(function(r){ return canViewReq(r) && (!q||cpHay(r).indexOf(q)>=0); })
+    .sort(function(a,b){ return ((a.status>=8)-(b.status>=8)) || (new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date)); });
+  const el=document.getElementById('cnList');
+  if(!list.length){ el.innerHTML='<div class="cp-none">'+(q?'Nenhuma solicitação encontrada.':'Você ainda não tem solicitações para conversar.')+'</div>'; return; }
+  el.innerHTML=list.slice(0,60).map(function(r){
+    return '<div class="cn-item" data-rid="'+esc(r.id)+'" onclick="startChatWith(this.dataset.rid)">'
+      +'<div class="cp-row1"><span class="cp-id">'+esc(r.id)+'</span>'+statusBadge(r.status)+((r.chat||[]).length?'<span class="cp-time">💬 '+r.chat.length+' msg</span>':'')+'</div>'
+      +'<div class="cp-items">'+esc(cpItemsTxt(r))+'</div>'
+      +'<div class="cp-prev">'+esc(r.requester||'')+(reqSector(r)?' • '+esc(reqSector(r)):'')+'</div></div>';
+  }).join('');
+}
+function startChatWith(reqId){ closeModal('chatNewModal'); openChat(reqId); }
+
 function emailUser(req,oldStatus,extra){
   if(!GAS_URL) return;
   extra=extra||{};
@@ -2292,154 +2494,9 @@ function forceSyncGAS(){
 // ── COTAÇÃO & APROVAÇÃO DE ALÇADA ──────────────────────────────
 
 function renderQuoteTab(r){
-  var q  = r.quote  || {suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
   var al = r.alcada || {requested:false,requestedAt:'',approvedBy:'',approvedAt:'',status:'',obs:''};
   var canEdit = isMaster();
-  var items   = r.items || [];
   var rid = r.id;
-
-  // ── arquivos anexados (orçamentos) ───────────────────────
-  var filesHtml = '';
-  if((q.files||[]).length){
-    filesHtml = '<div style="margin-bottom:14px;">';
-    (q.files||[]).forEach(function(f){
-      var isImg = f.type && f.type.startsWith('image/');
-      var thumb = isImg
-        ? '<img src="'+f.data+'" style="width:48px;height:48px;object-fit:cover;border-radius:5px;border:1px solid var(--line-2);cursor:pointer;" onclick="openFilePreview(\''+f.id+'\',\''+rid+'\')" title="Visualizar">'
-        : '<span style="font-size:22px;">📄</span>';
-      var sizeKb = f.size ? Math.round(f.size/1024)+'KB' : '';
-      filesHtml += '<div class="file-chip" style="align-items:center;gap:8px;padding:6px 10px;">'
-        + thumb
-        + '<div style="line-height:1.3;">'
-        + '<div style="font-weight:800;font-size:12px;">'+f.name+'</div>'
-        + (sizeKb ? '<div style="font-size:10px;color:var(--ink-3);">'+sizeKb+'</div>' : '')
-        + '</div>'
-        + '<a href="'+f.data+'" download="'+f.name+'" title="Baixar" style="color:var(--mint-ink);font-size:16px;text-decoration:none;">⬇</a>'
-        + (canEdit ? '<span onclick="removeFile(\''+rid+'\',\''+f.id+'\')" style="cursor:pointer;color:var(--coral-ink);font-size:16px;" title="Remover">×</span>' : '')
-        + '</div>';
-    });
-    filesHtml += '</div>';
-  } else {
-    filesHtml = '<div style="color:var(--ink-3);font-size:13px;padding:8px 0;">Nenhum arquivo anexado.</div>';
-  }
-
-  // ── cards de fornecedores ─────────────────────────────────
-  var suppCards = '';
-  if((q.suppliers||[]).length){
-    (q.suppliers||[]).forEach(function(s){
-      var isWinner = s.id===q.winnerId;
-      suppCards += '<div class="supplier-card'+(isWinner?' winner':'')+'"><div class="supplier-card-name">'
-        + (isWinner ? '<span class="winner-crown">👑</span>' : '')
-        + '<span style="flex:1">'+s.name+'</span>'
-        + (s.cnpj ? '<span style="font-size:11px;color:var(--ink-3);font-weight:600;">CNPJ: '+s.cnpj+'</span>' : '')
-        + (canEdit&&!isWinner ? '<button class="btn btn-green btn-sm" style="font-size:11px;padding:3px 9px;" onclick="setWinner(\''+rid+'\',\''+s.id+'\')">👑 Vencedor</button>' : '')
-        + (canEdit ? '<button class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 8px;" onclick="removeSupplier(\''+rid+'\',\''+s.id+'\')">✕</button>' : '')
-        + '</div>'
-        + '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 4px;">'
-        + '<div><div style="font-size:10px;color:var(--ink-3);font-weight:700;text-transform:uppercase;">Valor Total</div>'
-        + '<div class="supplier-val">R$ '+(s.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div></div>'
-        + (s.payTerm ? '<div><div style="font-size:10px;color:var(--ink-3);font-weight:700;text-transform:uppercase;">Prazo Pagamento</div><div style="font-size:13px;font-weight:800;color:var(--ink);">'+s.payTerm+'</div></div>' : '')
-        + (s.delivTerm ? '<div><div style="font-size:10px;color:var(--ink-3);font-weight:700;text-transform:uppercase;">Prazo Entrega</div><div style="font-size:13px;font-weight:800;color:var(--ink);">'+s.delivTerm+'</div></div>' : '')
-        + '</div>'
-        + (s.obs ? '<div class="supplier-obs">'+s.obs+'</div>' : '')
-        + '</div>';
-    });
-  } else {
-    suppCards = '<div style="color:var(--ink-3);font-size:13px;padding:10px 0;">Nenhum fornecedor cadastrado ainda.</div>';
-  }
-
-  // ── formulário adicionar fornecedor ───────────────────────
-  var addSuppForm = '';
-  if(canEdit){
-    var itemInputs = items.map(function(it,i){
-      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">'
-        + '<div style="flex:2;font-size:13px;font-weight:700;color:var(--ink);min-width:120px;">'+it.desc+' <span style="color:var(--ink-3);">×'+it.qty+'</span></div>'
-        + '<div style="flex:1;min-width:110px;"><input id="nsFornItemVal_'+i+'" class="fc" type="number" min="0" step="0.01" placeholder="Valor unitário R$" style="font-size:13px;"></div>'
-        + '</div>';
-    }).join('');
-    addSuppForm = '<div style="background:var(--field);border-radius:10px;padding:16px;margin-top:10px;">'
-      + '<div style="font-weight:800;font-size:12.5px;color:var(--ink);margin-bottom:12px;">➕ Adicionar Fornecedor</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'
-      + '<div><label style="font-size:11px;font-weight:800;color:var(--ink-2);text-transform:uppercase;">Nome *</label><input id="nsFornNome" class="fc" placeholder="Ex: Empresa XYZ Ltda" style="margin-top:4px;font-size:13px;"></div>'
-      + '<div><label style="font-size:11px;font-weight:800;color:var(--ink-2);text-transform:uppercase;">CNPJ</label><input id="nsFornCnpj" class="fc" placeholder="00.000.000/0000-00" style="margin-top:4px;font-size:13px;" oninput="maskCnpj(this)"></div>'
-      + '<div><label style="font-size:11px;font-weight:800;color:var(--ink-2);text-transform:uppercase;">Prazo Pagamento</label><input id="nsFornPagto" class="fc" placeholder="Ex: 30 dias, À vista" style="margin-top:4px;font-size:13px;"></div>'
-      + '<div><label style="font-size:11px;font-weight:800;color:var(--ink-2);text-transform:uppercase;">Prazo Entrega</label><input id="nsFornEntrega" class="fc" placeholder="Ex: 5 dias úteis" style="margin-top:4px;font-size:13px;"></div>'
-      + '</div>'
-      + '<div style="font-weight:800;font-size:12px;color:var(--ink-2);text-transform:uppercase;margin-bottom:8px;">Valores por Item</div>'
-      + '<div id="nsFornItens" style="margin-bottom:10px;">'+itemInputs+'</div>'
-      + '<div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:800;color:var(--ink-2);text-transform:uppercase;">Observações</label><input id="nsFornObs" class="fc" placeholder="Condições especiais, marca, validade..." style="margin-top:4px;font-size:13px;"></div>'
-      + '<button class="btn btn-green btn-sm" onclick="addSupplier(\''+rid+'\','+items.length+')">✔ Adicionar Fornecedor</button>'
-      + '</div>';
-  }
-
-  // ── análise por item ──────────────────────────────────────
-  var itemAnalysis = '';
-  if(!(q.suppliers||[]).length){
-    itemAnalysis = '<div style="color:var(--ink-3);font-size:13px;padding:14px;text-align:center;background:var(--field);border-radius:8px;">Cadastre fornecedores na aba Orçamentos para visualizar a análise.</div>';
-  } else {
-    items.forEach(function(it, i){
-      var prices = (q.suppliers||[]).map(function(s){
-        return {suppId:s.id,name:s.name,val:(s.itemValues&&s.itemValues[i])||0,total:((s.itemValues&&s.itemValues[i])||0)*it.qty};
-      }).filter(function(x){ return x.val>0; }).sort(function(a,b){ return a.total-b.total; });
-      if(!prices.length){
-        itemAnalysis += '<div style="background:var(--field);border-radius:9px;padding:12px 14px;margin-bottom:12px;">'
-          + '<div style="font-weight:900;font-size:13px;color:var(--ink);margin-bottom:4px;">📦 '+it.desc+' <span style="color:var(--ink-3);font-weight:600;">× '+it.qty+'</span></div>'
-          + '<div style="color:var(--ink-3);font-size:12px;">Sem preços cadastrados.</div></div>';
-        return;
-      }
-      var minTotal = prices[0].total;
-      var rows = prices.map(function(p,pi){
-        var isWin  = p.suppId===q.winnerId;
-        var isBest = pi===0;
-        var diff   = isBest ? 0 : Math.round((p.total/minTotal-1)*100);
-        var rowBg  = isWin?'#f0fbf4':isBest?'#f8fff8':'#fff';
-        var valCol = isWin?'var(--green)':isBest?'#27ae60':'#2c3e30';
-        var badge  = isWin
-          ? '<span style="background:var(--t-ok);color:var(--mint-ink);font-weight:900;font-size:10px;padding:2px 8px;border-radius:8px;">VENCEDOR</span>'
-          : isBest
-            ? '<span style="background:var(--t-warn);color:var(--amber-ink);font-weight:800;font-size:10px;padding:2px 8px;border-radius:8px;">MENOR</span>'
-            : '—';
-        return '<tr style="background:'+rowBg+';">'
-          + '<td style="padding:7px 10px;border-bottom:1px solid var(--line);font-weight:700;">'+(isWin?'👑 ':isBest?'⭐ ':'')+p.name+'</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;font-weight:800;color:'+valCol+';">R$ '+p.val.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;font-weight:900;color:'+valCol+';">R$ '+p.total.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:11px;color:'+(diff>0?'var(--coral-ink)':'var(--mint-ink)')+';">'+(diff>0?'+'+diff+'%':diff===0?'—':diff+'%')+'</td>'
-          + '<td style="padding:7px 10px;border-bottom:1px solid var(--line);text-align:center;">'+badge+'</td>'
-          + '</tr>';
-      }).join('');
-      itemAnalysis += '<div style="background:var(--field);border:1.5px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px;">'
-        + '<div style="font-weight:900;font-size:13.5px;color:var(--ink);margin-bottom:10px;">📦 '+it.desc+' <span style="font-size:11px;color:var(--ink-3);font-weight:600;">Qtd: '+it.qty+'</span></div>'
-        + '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
-        + '<thead><tr>'
-        + '<th style="background:var(--field);padding:7px 10px;text-align:left;border-bottom:2px solid var(--line);font-size:10.5px;font-weight:900;text-transform:uppercase;color:var(--ink-2);">Fornecedor</th>'
-        + '<th style="background:var(--field);padding:7px 10px;text-align:right;border-bottom:2px solid var(--line);font-size:10.5px;font-weight:900;text-transform:uppercase;color:var(--ink-2);">Unit.</th>'
-        + '<th style="background:var(--field);padding:7px 10px;text-align:right;border-bottom:2px solid var(--line);font-size:10.5px;font-weight:900;text-transform:uppercase;color:var(--ink-2);">Total</th>'
-        + '<th style="background:var(--field);padding:7px 10px;text-align:right;border-bottom:2px solid var(--line);font-size:10.5px;font-weight:900;text-transform:uppercase;color:var(--ink-2);">Dif.%</th>'
-        + '<th style="background:var(--field);padding:7px 10px;text-align:center;border-bottom:2px solid var(--line);font-size:10.5px;font-weight:900;text-transform:uppercase;color:var(--ink-2);">Status</th>'
-        + '</tr></thead><tbody>'+rows+'</tbody></table></div>';
-    });
-  }
-
-  // ── análise do comprador ──────────────────────────────────
-  var buyerHtml = canEdit
-    ? '<textarea id="buyerAnalysisInput" class="fc" rows="3" placeholder="Motivo da escolha, condições negociadas, observações gerais..." style="font-size:13px;">'+(q.buyerAnalysis||'')+'</textarea>'
-      + '<button class="btn btn-green btn-sm" style="margin-top:8px;" onclick="saveBuyerAnalysis(\''+rid+'\')">💾 Salvar Análise</button>'
-    : '<div style="background:var(--field);border-radius:7px;padding:10px 13px;font-size:13px;color:var(--ink);min-height:48px;">'+(q.buyerAnalysis||'<span style="color:var(--ink-3);">Análise não preenchida.</span>')+'</div>';
-
-  // ── winner box ────────────────────────────────────────────
-  var winner = (q.suppliers||[]).find(function(s){ return s.id===q.winnerId; });
-  var winnerBox = '';
-  if(winner){
-    winnerBox = '<div style="margin-top:14px;background:var(--t-ok);border:2px solid var(--green-md);border-radius:9px;padding:14px;">'
-      + '<div style="font-weight:800;font-size:13px;color:var(--mint-ink);margin-bottom:6px;">🏆 Fornecedor Vencedor</div>'
-      + '<div style="font-size:16px;font-weight:900;color:var(--mint-ink);">'+winner.name+'</div>'
-      + (winner.cnpj ? '<div style="font-size:12px;color:var(--ink-2);margin-top:2px;">CNPJ: '+winner.cnpj+'</div>' : '')
-      + '<div style="font-size:18px;font-weight:900;color:var(--mint-ink);margin-top:4px;">R$ '+(winner.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>'
-      + '<div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">'
-      + (winner.payTerm ? '<div style="font-size:12px;color:var(--ink-2);">💳 <strong>'+winner.payTerm+'</strong></div>' : '')
-      + (winner.delivTerm ? '<div style="font-size:12px;color:var(--ink-2);">🚚 <strong>'+winner.delivTerm+'</strong></div>' : '')
-      + '</div></div>';
-  }
 
   // ── bloco de alçada ───────────────────────────────────────
   var alcadaHtml = '';
@@ -2497,142 +2554,7 @@ function renderQuoteTab(r){
 
   // ── montar retorno final ──────────────────────────────────
   return '<hr style="border:none;border-top:1.5px solid var(--line);margin:18px 0;">'
-    + '<div class="quote-tab-bar">'
-    + '<button class="quote-tab active" onclick="switchQuoteTab(this,\'qt-orcamentos\')">📎 Orçamentos</button>'
-    + '<button class="quote-tab" onclick="switchQuoteTab(this,\'qt-analise\')">📊 Análise por Item</button>'
-    + '<button class="quote-tab" onclick="switchQuoteTab(this,\'qt-alcada\')">🔐 Aprovação de Alçada</button>'
-    + '</div>'
-
-    // ABA ORÇAMENTOS
-    + '<div id="qt-orcamentos" class="quote-section active">'
-    + '<div style="font-weight:800;font-size:12px;color:var(--ink-2);text-transform:uppercase;margin-bottom:8px;">📎 Arquivos Anexados</div>'
-    + filesHtml
-    + (canEdit ? '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;background:var(--field);border:2px dashed var(--b-ok);border-radius:8px;padding:11px 15px;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:16px;">'
-        + '<span style="font-size:20px;">📎</span>'
-        + '<span>Clique para anexar orçamento (PDF, imagem ou planilha)</span>'
-        + '<input type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx" multiple style="display:none" onchange="attachQuoteFile(\''+rid+'\',this)">'
-        + '</label>' : '')
-    + '<div style="font-weight:800;font-size:12px;color:var(--ink-2);text-transform:uppercase;margin-bottom:8px;">🏢 Fornecedores Cotados</div>'
-    + suppCards
-    + addSuppForm
-    + '</div>'
-
-    // ABA ANÁLISE
-    + '<div id="qt-analise" class="quote-section">'
-    + '<div style="font-weight:800;font-size:12px;color:var(--ink-2);text-transform:uppercase;margin-bottom:12px;">Comparativo por Item</div>'
-    + itemAnalysis
-    + '<div style="margin-top:16px;">'
-    + '<div style="font-weight:800;font-size:12px;color:var(--ink-2);text-transform:uppercase;margin-bottom:7px;">💬 Análise do Comprador</div>'
-    + buyerHtml
-    + '</div>'
-    + winnerBox
-    + '</div>'
-
-    // ABA ALÇADA
-    + '<div id="qt-alcada" class="quote-section">'
-    + alcadaHtml
-    + '</div>';
-}
-
-function switchQuoteTab(btn, tabId){
-  const modal = btn.closest('.modal');
-  modal.querySelectorAll('.quote-tab').forEach(t=>t.classList.remove('active'));
-  modal.querySelectorAll('.quote-section').forEach(s=>s.classList.remove('active'));
-  btn.classList.add('active');
-  const sec = document.getElementById(tabId);
-  if(sec) sec.classList.add('active');
-}
-
-function maskCnpj(el){
-  let v=el.value.replace(/\D/g,'');
-  if(v.length>14) v=v.slice(0,14);
-  v=v.replace(/^(\d{2})(\d)/,'$1.$2')
-     .replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3')
-     .replace(/\.(\d{3})(\d)/,'.$1/$2')
-     .replace(/(\d{4})(\d)/,'$1-$2');
-  el.value=v;
-}
-
-function addSupplier(reqId, numItems){
-  if(!isMaster()) return;
-  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
-  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-  const name=(document.getElementById('nsFornNome')?.value||'').trim();
-  if(!name){ toast('Informe o nome do fornecedor.','error'); return; }
-  const cnpj=(document.getElementById('nsFornCnpj')?.value||'').trim();
-  const payTerm=(document.getElementById('nsFornPagto')?.value||'').trim();
-  const delivTerm=(document.getElementById('nsFornEntrega')?.value||'').trim();
-  const obs=(document.getElementById('nsFornObs')?.value||'').trim();
-  // Valores por item
-  const itemValues=[];
-  let totalValue=0;
-  for(let i=0;i<numItems;i++){
-    const v=parseFloat(document.getElementById('nsFornItemVal_'+i)?.value)||0;
-    const qty=(r.items[i]?.qty||1);
-    itemValues.push(v);
-    totalValue+=v*qty;
-  }
-  r.quote.suppliers.push({id:'S'+Date.now(),name,cnpj,payTerm,delivTerm,obs,itemValues,totalValue});
-  touchReq(r,'orcamento','Fornecedor cotado: '+name); saveDB(); toast('Fornecedor adicionado.','success'); showDetail(reqId);
-}
-
-function removeSupplier(reqId, suppId){
-  if(!isMaster()) return;
-  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
-  if(r.quote.winnerId===suppId) r.quote.winnerId='';
-  r.quote.suppliers=r.quote.suppliers.filter(s=>s.id!==suppId);
-  touchReq(r,'orcamento','Fornecedor removido da cotação'); saveDB(); toast('Fornecedor removido.','success'); showDetail(reqId);
-}
-
-function setWinner(reqId, suppId){
-  if(!isMaster()) return;
-  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
-  r.quote.winnerId=suppId;
-  touchReq(r,'orcamento','Fornecedor vencedor definido: '+((r.quote.suppliers.find(function(x){ return x.id===suppId; })||{}).name||'')); saveDB(); toast('Fornecedor vencedor definido!','success'); showDetail(reqId);
-}
-
-function saveBuyerAnalysis(reqId){
-  if(!isMaster()) return;
-  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
-  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-  const txt=(document.getElementById('buyerAnalysisInput')?.value||'').trim();
-  r.quote.buyerAnalysis=txt;
-  touchReq(r,'orcamento','Análise do comprador atualizada'); saveDB(); toast('Análise salva.','success'); showDetail(reqId);
-}
-
-function openFilePreview(fileId, reqId){
-  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
-  const f=(r.quote.files||[]).find(x=>x.id===fileId); if(!f) return;
-  const win=window.open('','_blank','width=900,height=700');
-  if(f.type&&f.type.startsWith('image/')){
-    win.document.write(`<html><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${f.data}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body></html>`);
-  } else {
-    win.document.write(`<html><body style="margin:0;"><embed src="${f.data}" type="${f.type}" width="100%" height="100%" style="position:fixed;inset:0;"></body></html>`);
-  }
-}
-
-function attachQuoteFile(reqId, input){
-  if(!isMaster()) return;
-  const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
-  if(!r.quote) r.quote={suppliers:[],buyerAnalysis:'',winnerId:'',files:[]};
-  if(!r.quote.files) r.quote.files=[];
-  const files=Array.from(input.files);
-  let loaded=0;
-  files.forEach(f=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      r.quote.files.push({id:'F'+Date.now()+Math.random().toString(36).slice(2),name:f.name,data:e.target.result,type:f.type,size:f.size,reqId});
-      loaded++;
-      if(loaded===files.length){ touchReq(r,'orcamento',files.length+' arquivo(s) de orçamento anexado(s)'); saveDB(); toast(files.length+' arquivo(s) anexado(s).','success'); showDetail(reqId); }
-    };
-    reader.readAsDataURL(f);
-  });
-}
-
-function removeFile(reqId, fileId){
-  const r=DB.requests.find(x=>x.id===reqId); if(!r||!r.quote) return;
-  r.quote.files=r.quote.files.filter(f=>f.id!==fileId);
-  touchReq(r,'orcamento','Arquivo de orçamento removido'); saveDB(); toast('Arquivo removido.','success'); showDetail(reqId);
+    + '<div id="qt-alcada">'+alcadaHtml+'</div>';
 }
 
 function openApproverModal(reqId){
@@ -2725,14 +2647,11 @@ function confirmRequestAlcada(){
   if(!GAS_URL){
     toast('GAS não configurado — e-mail não enviado.','error');
   } else {
-    const w=(r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
     gasPost({
       action:'sendAlcadaEmail', to:emailDestino, approverName:approver.name,
       reqId:r.id, requester:r.requester, sector:reqSector(r),
       items:(r.items||[]).map(function(i){ return i.desc+' x'+i.qty; }).join(', '),
       value:v,
-      winnerName:w?w.name:'Não definido', winnerValue:w?(w.totalValue||0):0,
-      buyerAnalysis:r.quote?(r.quote.buyerAnalysis||''):'',
       requestedBy:CU.name, date:new Date().toLocaleString('pt-BR')
     }).then(function(res){
       if(res && res.success){ toast('📧 E-mail enviado para '+emailDestino,'success'); }
@@ -2777,17 +2696,18 @@ function renderAdminDash(){
   const urg   = all.filter(r=>(r.type==='IMEDIATA'||r.type==='URGENTE')&&r.status<8).length;
   const uPend = DB.users.filter(u=>u.status==='pending').length;
 
-  // ── KPI: Tempo médio até o 1º atendimento (criação → 1ª ação da equipe) ──
+  // ── KPI: Tempo médio até o 1º atendimento (criação → 1ª atualização da equipe = acolhimento) ──
   const respTimes = all.map(r=>{
     const fr = firstResponseDate(r); if(!fr) return null;
     return (fr - new Date(r.createdAt||r.date)) / 36e5;
   }).filter(h=>h!==null&&h>=0&&h<8760);
   const avgRespTxt = respTimes.length ? fmtDur(respTimes.reduce((a,b)=>a+b,0)/respTimes.length*36e5) : '—';
+  const waitingFirst = all.filter(r=>r.status<8 && !firstResponseDate(r)).length;
 
-  // ── KPI: Tempo médio de atendimento até finalizar ──
+  // ── KPI: Tempo médio de finalização (criação → status Finalizada) ──
   const finTimes = all
     .filter(r=>r.status===8)
-    .map(r=>(new Date(r.finishedAt||r.updatedAt) - new Date(r.createdAt||r.date)) / 36e5)
+    .map(r=>(finishDate(r) - new Date(r.createdAt||r.date)) / 36e5)
     .filter(h=>h>=0&&h<8760);
   const avgFinTxt = finTimes.length ? fmtDur(finTimes.reduce((a,b)=>a+b,0)/finTimes.length*36e5) : '—';
   const recus = all.filter(r=>r.status===9).length, cancel = all.filter(r=>r.status===10).length;
@@ -2805,7 +2725,7 @@ function renderAdminDash(){
       <span class="stat-icon">🕐</span>
       <div class="stat-lbl">Tempo Médio 1º Atendimento</div>
       <div class="stat-val" style="font-size:18px;">${avgRespTxt}</div>
-      <div class="stat-sub" style="font-size:10.5px;color:var(--ink-3);margin-top:2px;">${respTimes.length} sol. consideradas</div>
+      <div class="stat-sub" style="font-size:10.5px;color:var(--ink-3);margin-top:2px;">${respTimes.length} acolhida(s)${waitingFirst?' &bull; '+waitingFirst+' aguardando':''}</div>
     </div>
     <div class="stat-card" style="border-left-color:#8b5cf6;">
       <span class="stat-icon">🏁</span>
@@ -2833,7 +2753,7 @@ function renderAdminDash(){
         <button class="btn btn-outline btn-sm" onclick="showDetail('${r.id}')">Ver</button>
       </div>`).join('');
 
-  // ── Paradas +7 dias: ABERTAS sem NENHUMA atividade (status, item, chat, cotação, alçada...) ──
+  // ── Paradas +7 dias: ABERTAS sem NENHUMA interação (status, item ou chat) ──
   const stale = all.filter(isStale).sort((x,y)=>lastActivityDate(x)-lastActivityDate(y));
   const stEl = document.getElementById('staleAlerts');
   if(stEl) stEl.innerHTML = !stale.length
@@ -3302,20 +3222,68 @@ function fmtDT(iso){
   if(isNaN(d)) return String(iso);
   return d.toLocaleDateString('pt-BR')+' '+d.toTimeString().slice(0,5);
 }
-function lastActivityDate(r){ return new Date(r.updatedAt||r.createdAt||r.date); }
+// ── REGRAS DE TEMPO ────────────────────────────────────────────────────────
+// "Interação" = qualquer movimentação registrada na solicitação: mudança de status (da solicitação
+// ou de item), mensagem no chat, atribuição de atendente, valor/alçada. Não conta o simples ato de salvar.
+function parseBRDT(t){
+  const m=String(t||'').match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  return m ? new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]) : null;
+}
+function interactionTimes(r){
+  const out=[];
+  const add=function(v){ const d=(v instanceof Date)?v:new Date(v); const t=d.getTime(); if(!isNaN(t)) out.push(t); };
+  (r.statusHistory||[]).forEach(function(h){ if(h&&h.at) add(h.at); });
+  (r.activity||[]).forEach(function(a){ if(a&&a.at&&a.type!=='criada') add(a.at); });
+  (r.chat||[]).forEach(function(c){ if(!c) return; if(c.at) add(c.at); else { const d=parseBRDT(c.time); if(d) add(d); } });
+  return out;
+}
+// Última interação (se nunca houve nenhuma, vale a data de criação)
+function lastActivityDate(r){
+  const t=interactionTimes(r), c=new Date(r.createdAt||r.date).getTime();
+  if(!t.length) return new Date(isNaN(c)?(r.updatedAt||Date.now()):c);
+  return new Date(Math.max.apply(null,t.concat(isNaN(c)?[]:[c])));
+}
 function daysSinceUpdate(r){ return (Date.now()-lastActivityDate(r))/864e5; }
-// "Parada" = solicitação ABERTA sem nenhuma atividade (status, item, chat, cotação, alçada...) há mais de 7 dias
+// "Parada" = solicitação ABERTA sem nenhuma interação (status, item ou chat) há mais de 7 dias
 function isStale(r){ return r.status<8 && daysSinceUpdate(r)>STALE_DAYS; }
+// Data de finalização (status 8). Usa finishedAt; se faltar, a última mudança para "Finalizada"
+function finishDate(r){
+  if(r.finishedAt){ const d=new Date(r.finishedAt); if(!isNaN(d)) return d; }
+  const h=(r.statusHistory||[]).filter(function(x){ return x&&x.to===8&&x.at; }).pop();
+  if(h) return new Date(h.at);
+  return new Date(r.updatedAt||r.createdAt||r.date);
+}
 function ageLabel(r){
   const start=new Date(r.createdAt||r.date);
-  const end = r.status>=8 ? new Date(r.finishedAt||r.updatedAt||Date.now()) : new Date();
+  const end = r.status>=8 ? (r.status===8?finishDate(r):new Date(r.finishedAt||r.updatedAt||Date.now())) : new Date();
   return fmtDur(end-start);
 }
 function sinceUpdateLabel(r){ return fmtDur(Date.now()-lastActivityDate(r)); }
+// Quem agiu é da equipe de Compras? (exclui o próprio requisitante e a Direção/alçada)
+function isTeamActor(name,id,r){
+  if(id!=null && id!=='' && r && String(id)===String(r.userId)) return false;
+  if(r && name && name===r.requester) return false;
+  const u=DB.users.find(function(x){ return (id!=null&&id!==''&&String(x.id)===String(id)) || (name&&x.name===name); });
+  if(u && (u.role==='user'||u.role==='direcao')) return false;
+  return true;
+}
+// 1º atendimento = a PRIMEIRA atualização feita pela equipe depois da criação (acolhimento da demanda):
+// mudança de status, mensagem no chat, atribuição de atendente, item, valor etc.
 function firstResponseDate(r){
-  if(r.firstResponseAt) return new Date(r.firstResponseAt);
-  const h=(r.statusHistory||[])[0];
-  return h&&h.at ? new Date(h.at) : null;
+  const created=new Date(r.createdAt||r.date).getTime(); let best=null;
+  const consider=function(v){ const t=new Date(v).getTime(); if(isNaN(t)||t<created) return; if(best===null||t<best) best=t; };
+  if(r.firstResponseAt) consider(r.firstResponseAt);
+  (r.statusHistory||[]).forEach(function(h){ if(h&&h.at&&isTeamActor(h.by,null,r)) consider(h.at); });
+  (r.activity||[]).forEach(function(a){
+    if(!a||!a.at||a.type==='criada') return;
+    if(a.type==='atendente' && /removido/i.test(a.text||'')) return;
+    if(isTeamActor(a.by,a.byId,r)) consider(a.at);
+  });
+  (r.chat||[]).forEach(function(c){
+    if(!c||c.from!=='admin') return;
+    const d=c.at?new Date(c.at):parseBRDT(c.time); if(d&&isTeamActor(c.by,null,r)) consider(d);
+  });
+  return best===null?null:new Date(best);
 }
 function reqItemsTotal(r){
   return (r.items||[]).reduce(function(a,it){
@@ -3422,6 +3390,7 @@ function updateNotifBadge(){
   if(ndot){ ndot.style.display=(uc+ap)>0?'block':'none'; ndot.style.background=ap>0?'#d4ac0d':'var(--red)'; }
   const nb=document.getElementById('navAP');
   if(nb){ nb.textContent=ap; nb.style.display=ap>0?'inline':'none'; }
+  updateChatBadge();
 }
 
 // ── Re-render geral após uma ação ─────────────────────────────────────────
@@ -3436,6 +3405,7 @@ function refreshAll(reqId){
   if(act('aprovacoes'))   renderAprovacoes();
   if(act('relatorios'))   renderReport();
   if(act('dashboard'))    renderUserDash();
+  if(act('chat'))         renderChatPage(true);
   updateNotifBadge();
 }
 
@@ -3747,12 +3717,11 @@ function renderAprovacoes(){
   let html='<div style="font-weight:900;font-size:14px;margin-bottom:10px;font-family:\'Nunito\',sans-serif;">⏳ Aguardando minha decisão ('+pend.length+')</div>';
   if(!pend.length) html+='<div class="card" style="text-align:center;padding:28px;color:var(--ink-3);margin-bottom:18px;">Nenhuma aprovação pendente. ✅</div>';
   html+=pend.map(function(r){
-    const w=(r.quote&&r.quote.suppliers||[]).find(function(s){ return s.id===r.quote.winnerId; });
     return '<div class="req-card urgent" style="border-left-color:#d4ac0d;">'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"><strong>'+r.id+'</strong>'+urgBadge(r.type)+statusBadge(r.status)+'</div>'
       +'<div style="font-size:13.5px;font-weight:700;">'+r.items.map(function(i){ return esc(i.desc)+' ×'+i.qty; }).join(', ')+'</div>'
       +'<div style="font-size:12px;color:var(--ink-3);margin:4px 0;">'+esc(r.requester)+' • '+esc(reqSector(r))+' • enviada em '+esc(r.alcada.requestedAt||'—')+(r.alcada.requestedByName?' por '+esc(r.alcada.requestedByName):'')+'</div>'
-      +(w?'<div style="font-size:12.5px;color:var(--mint-ink);font-weight:700;">🏆 '+esc(w.name)+' — R$ '+(w.totalValue||0).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>':'')
+      +(r.alcada&&r.alcada.value?'<div style="font-size:12.5px;color:var(--mint-ink);font-weight:700;">Valor estimado: R$ '+Number(r.alcada.value).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>':'')
       +'<div style="margin-top:10px;"><button class="btn btn-yellow btn-sm" onclick="showDetail(\''+r.id+'\')">🔐 Analisar e decidir</button></div></div>';
   }).join('');
   if(done.length){
@@ -3844,7 +3813,7 @@ function renderAttendantChart(all){
     if(!m[n]) m[n]={total:0,open:0,fin:0,closed:0,ms:0};
     const o=m[n]; o.total++;
     if(r.status<8) o.open++;
-    else if(r.status===8){ o.fin++; o.ms+=(new Date(r.finishedAt||r.updatedAt)-new Date(r.createdAt||r.date))||0; }
+    else if(r.status===8){ o.fin++; o.ms+=(finishDate(r)-new Date(r.createdAt||r.date))||0; }
     else o.closed++;
   });
   const ent=Object.keys(m).map(function(k){ return [k,m[k]]; }).sort(function(a,b){ return b[1].total-a[1].total; });
