@@ -2680,6 +2680,7 @@ function costKnownSectors(){
   DB.users.forEach(function(u){ if(u.sector) m[String(u.sector).trim()]=1; });
   DB.requests.forEach(function(r){ var s=reqSector(r); if(s&&s!=='—') m[String(s).trim()]=1; });
   delete m['']; delete m['—'];
+  costHidden().forEach(function(h){ delete m[h]; });
   return Object.keys(m).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
 }
 function parseMoneyBR(v){
@@ -2863,27 +2864,45 @@ function deleteCost(id){
   DB.deletedCosts=(DB.deletedCosts||[]).concat([{k:String(id),at:new Date().toISOString()}]);
   saveDB(); toast('Lançamento excluído.','success'); renderCustos();
 }
-var _csList=[];
+var _csList=[], _csHidden=[];
+function costHidden(){ return (DB.costCfg&&DB.costCfg.hidden)||[]; }
 function openCostSectors(){
   if(!isMaster()) return;
+  _csHidden=costHidden().slice();
   _csList=costKnownSectors(); renderCostSectors(costEnabled());
   document.getElementById('costSectorsModal').classList.remove('hidden');
 }
+function csChecked(){ return Array.prototype.map.call(document.querySelectorAll('#csList input:checked'),function(i){ return i.value; }); }
 function renderCostSectors(chk){
-  document.getElementById('csList').innerHTML=_csList.length?_csList.map(function(s){ return '<label class="cs-row"><input type="checkbox" value="'+esc(s)+'"'+(chk.indexOf(s)>=0?' checked':'')+'><span>'+esc(s)+'</span></label>'; }).join(''):'<div class="cp-none">Nenhum setor encontrado. Adicione abaixo.</div>';
+  var el=document.getElementById('csList');
+  el.innerHTML=_csList.length?_csList.map(function(s,i){
+    var n=(DB.costs||[]).filter(function(c){ return c.sector===s; }).length;
+    return '<div class="cs-row" style="cursor:default;"><label style="flex:1;display:flex;align-items:center;gap:10px;cursor:pointer;min-width:0;"><input type="checkbox" value="'+esc(s)+'"'+(chk.indexOf(s)>=0?' checked':'')+'><span style="overflow:hidden;text-overflow:ellipsis;">'+esc(s)+'</span></label>'
+      +(n?'<small style="color:var(--ink-3);font-weight:600;white-space:nowrap;">'+n+' lanç.</small>':'')
+      +'<button type="button" class="btn btn-outline btn-sm" title="Excluir setor" onclick="removeCostSector('+i+')">🗑</button></div>'; }).join(''):'<div class="cp-none">Nenhum setor. Adicione abaixo.</div>';
 }
 function addCostSector(){
   var inp=document.getElementById('csNew'), v=inp.value.trim(); if(!v) return;
+  _csHidden=_csHidden.filter(function(h){ return h!==v; });
   if(_csList.indexOf(v)<0){ _csList.push(v); _csList.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }); }
-  var cur=Array.prototype.map.call(document.querySelectorAll('#csList input:checked'),function(i){ return i.value; }); cur.push(v);
+  var cur=csChecked(); cur.push(v);
   renderCostSectors(cur);
   inp.value=''; inp.focus();
 }
+function removeCostSector(i){
+  var s=_csList[i]; if(s===undefined) return;
+  var n=(DB.costs||[]).filter(function(c){ return c.sector===s; }).length;
+  if(!confirm('Excluir o setor "'+s+'" do controle de custos?'+(n?'\n\nOs '+n+' lançamento(s) dele ficam guardados, mas deixam de aparecer. Se você cadastrar o setor de novo, eles voltam.':''))) return;
+  var cur=csChecked().filter(function(x){ return x!==s; });
+  _csList.splice(i,1);
+  if(_csHidden.indexOf(s)<0) _csHidden.push(s);
+  renderCostSectors(cur);
+}
 function saveCostSectors(){
-  var sel=Array.prototype.map.call(document.querySelectorAll('#csList input:checked'),function(i){ return i.value; });
-  DB.costCfg={sectors:sel,updatedAt:new Date().toISOString()};
-  saveDB(); closeModal('costSectorsModal'); toast('Setores habilitados atualizados.','success');
-  COST.sector=sel.indexOf(COST.sector)>=0?COST.sector:''; renderCustos();
+  var sel=csChecked();
+  DB.costCfg={sectors:sel,hidden:_csHidden.slice(),updatedAt:new Date().toISOString()};
+  saveDB(); closeModal('costSectorsModal'); toast('Setores atualizados.','success');
+  if(sel.indexOf(COST.sector)<0) COST.sector=''; renderCustos();
 }
 function costExport(){
   var all=costAllRows(), pr=costPeriod(all), rows=costFilter(all,pr[0],pr[1]).sort(function(a,b){ return String(a.date||a.month).localeCompare(String(b.date||b.month)); });
