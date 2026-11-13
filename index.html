@@ -1368,6 +1368,19 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
     </div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="impModal">
+  <div class="modal" style="max-width:640px;">
+    <div class="mhdr"><h3>⬆ Importar planilha de acompanhamento</h3></div>
+    <div class="mbody" style="color:var(--ink);">
+      <input type="file" id="impFile" accept=".xlsx" class="fc" onchange="impLoad(this)" style="margin-bottom:12px;">
+      <div id="impBody"></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="impRemoveAll()" title="Remove só o que veio de importação">🗑 Remover dados importados</button>
+        <div style="display:flex;gap:8px;"><button class="btn btn-outline" onclick="closeModal('impModal')">Cancelar</button><button class="btn btn-green" id="impGo" style="display:none;" onclick="impConfirm()">⬆ Importar</button></div>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="approverModal">
   <div class="modal" style="max-width:480px;">
     <div class="mhdr" style="background:linear-gradient(135deg,#d4ac0d,#f1c40f);">
@@ -2674,6 +2687,11 @@ function mkDiff(a,b){ return (+b.slice(0,4)-+a.slice(0,4))*12+(+b.slice(5,7)-+a.
 
 var COST={tab:'dash',per:'6m',from:'',to:'',sector:'',cat:'',src:'',group:'sector',ctype:'stack',q:''};
 var COST_PER=[['m','Este mês'],['3m','Últimos 3 meses'],['6m','Últimos 6 meses'],['12m','Últimos 12 meses'],['y','Ano atual'],['all','Todo o período'],['c','Personalizado']];
+function costCats(){
+  var m={}, out=[];
+  (DB.categories||[]).concat(stockList(),(DB.costs||[]).map(function(c){ return c.cat; })).forEach(function(c){ if(c&&!m[c]){ m[c]=1; out.push(c); } });
+  return out;
+}
 function costEnabled(){ return (DB.costCfg&&DB.costCfg.sectors)||[]; }
 function costKnownSectors(){
   var m={}; costEnabled().forEach(function(s){ m[s]=1; });
@@ -2697,7 +2715,7 @@ function costAllRows(){
   (DB.costs||[]).forEach(function(c){
     if(!en[c.sector]) return;
     var d=String(c.date||''); if(d.length<7) return;
-    out.push({id:c.id,month:d.slice(0,7),date:d.slice(0,10),sector:c.sector,cat:c.cat||'Sem categoria',value:Number(c.value)||0,desc:c.desc||'',src:'manual',by:c.by||''});
+    out.push({id:c.id,month:d.slice(0,7),date:d.slice(0,10),sector:c.sector,cat:c.cat||'Sem categoria',value:Number(c.value)||0,desc:c.desc||'',src:c.imported?'import':'manual',by:c.by||''});
   });
   (DB.requests||[]).forEach(function(r){
     if(r.status>=9) return;
@@ -2734,7 +2752,7 @@ function costFilter(rows,from,to,ign){
 }
 function costSum(rows){ return rows.reduce(function(a,r){ return a+r.value; },0); }
 function costColor(key,group){
-  var list=group==='cat'?(DB.categories||[]):costEnabled(), i=list.indexOf(key);
+  var list=group==='cat'?costCats():costEnabled(), i=list.indexOf(key);
   return vnColor(i<0?list.length+3:i);
 }
 function costSet(f,v){ COST[f]=v; renderCustos(); }
@@ -2761,9 +2779,9 @@ function renderCostDash(all,pr){
     +'<div class="db-card wide"><div class="db-h">📈 Evolução mensal<span class="db-tools"><span class="seg"><button class="'+(COST.group==='sector'?'on':'')+'" onclick="costSet(\'group\',\'sector\')">Por setor</button><button class="'+(COST.group==='cat'?'on':'')+'" onclick="costSet(\'group\',\'cat\')">Por categoria</button></span>'
     +'<span class="seg"><button class="'+(COST.ctype==='stack'?'on':'')+'" onclick="costSet(\'ctype\',\'stack\')">Barras</button><button class="'+(COST.ctype==='line'?'on':'')+'" onclick="costSet(\'ctype\',\'line\')">Linhas</button></span></span></div><div id="cuTrend"></div></div>'
     +'<div class="db-card"><div class="db-h">🏥 Custo por setor <small>clique para filtrar</small></div><div id="cuSec"></div></div>'
-    +'<div class="db-card"><div class="db-h">🏷 Por categoria <small>clique para filtrar</small></div><div id="cuCat"></div></div>'
+    +'<div class="db-card"><div class="db-h">🏷 Por categoria / estoque <small>clique para filtrar</small></div><div id="cuCat"></div></div>'
     +'<div class="db-card"><div class="db-h">🧭 Origem do custo</div><div id="cuSrc"></div></div>'
-    +'<div class="db-card wide"><div class="db-h">🔥 Setor × Categoria <small>clique em uma célula, linha ou coluna</small></div><div id="cuMx" class="cu-mx"></div></div>'
+    +'<div class="db-card wide"><div class="db-h">🔥 Setor × Categoria / Estoque <small>clique em uma célula, linha ou coluna</small></div><div id="cuMx" class="cu-mx"></div></div>'
     +'<div class="db-card wide"><div class="db-h">⭐ Maiores lançamentos</div><div id="cuTop" class="cu-mx"></div></div></div>';
   // evolução
   var months=mkRange(pr[0],pr[1]); if(months.length>36) months=months.slice(-36);
@@ -2783,11 +2801,11 @@ function renderCostDash(all,pr){
   vnDonut(document.getElementById('cuCat'),Object.keys(byCat).map(function(c){ return {key:c,label:c,value:byCat[c],color:costColor(c,'cat')}; }).sort(function(a,b){ return b.value-a.value; }),
     {active:COST.cat,fmt:brl,center:vnShort(costSum(costFilter(all,pr[0],pr[1],'cat'))),centerLabel:'R$ no período',onClick:function(k){ costTog('cat',k); }});
   // origem
-  var bySrc={compra:0,manual:0}; costFilter(all,pr[0],pr[1],'src').forEach(function(r){ bySrc[r.src]+=r.value; });
-  vnDonut(document.getElementById('cuSrc'),[{key:'compra',label:'Compras do sistema',value:bySrc.compra,color:'#2fbf71'},{key:'manual',label:'Lançamentos manuais',value:bySrc.manual,color:'#3b82f6'}],
-    {active:COST.src,fmt:brl,center:vnShort(bySrc.compra+bySrc.manual),centerLabel:'R$ no período',onClick:function(k){ costTog('src',k); }});
+  var bySrc={compra:0,manual:0,import:0}; costFilter(all,pr[0],pr[1],'src').forEach(function(r){ bySrc[r.src]+=r.value; });
+  vnDonut(document.getElementById('cuSrc'),[{key:'compra',label:'Compras do sistema',value:bySrc.compra,color:'#2fbf71'},{key:'manual',label:'Lançamentos manuais',value:bySrc.manual,color:'#3b82f6'},{key:'import',label:'Importados da planilha',value:bySrc.import,color:'#f5a524'}],
+    {active:COST.src,fmt:brl,center:vnShort(bySrc.compra+bySrc.manual+bySrc.import),centerLabel:'R$ no período',onClick:function(k){ costTog('src',k); }});
   // matriz
-  var mrows=costFilter(all,pr[0],pr[1]), secs=costEnabled().filter(function(s){ return !COST.sector||s===COST.sector; }), catsL=(DB.categories||[]).filter(function(c){ return mrows.some(function(r){ return r.cat===c; }); });
+  var mrows=costFilter(all,pr[0],pr[1]), secs=costEnabled().filter(function(s){ return !COST.sector||s===COST.sector; }), catsL=costCats().filter(function(c){ return mrows.some(function(r){ return r.cat===c; }); });
   mrows.forEach(function(r){ if(catsL.indexOf(r.cat)<0) catsL.push(r.cat); });
   var cell={}, rt={}, ct={}, mxv=0;
   mrows.forEach(function(r){ var k=r.sector+'\u0001'+r.cat; cell[k]=(cell[k]||0)+r.value; rt[r.sector]=(rt[r.sector]||0)+r.value; ct[r.cat]=(ct[r.cat]||0)+r.value; if(cell[k]>mxv) mxv=cell[k]; });
@@ -2810,11 +2828,11 @@ function renderCostDash(all,pr){
   document.getElementById('cuTop').innerHTML=topR.length?'<table class="cu-tbl"><thead><tr><th>Data</th><th>Setor</th><th>Categoria</th><th>Descrição</th><th>Origem</th><th style="text-align:right">Valor</th></tr></thead><tbody>'
     +topR.map(function(r){ return costRowHtml(r,false); }).join('')+'</tbody></table>':'<div class="vn-empty">Sem lançamentos no período.</div>';
 }
-function costSrcBadge(r){ return r.src==='compra'?'<span class="badge badge-green" title="'+esc(r.reqId||'')+'">🛒 Compra '+esc(r.reqId||'')+'</span>':'<span class="badge badge-blue">✍ Manual</span>'; }
+function costSrcBadge(r){ if(r.src==='import') return '<span class="badge badge-yellow">📥 Importado</span>'; return r.src==='compra'?'<span class="badge badge-green" title="'+esc(r.reqId||'')+'">🛒 Compra '+esc(r.reqId||'')+'</span>':'<span class="badge badge-blue">✍ Manual</span>'; }
 function costRowHtml(r,actions){
   var d=r.date?r.date.split('-').reverse().join('/'):mkLabel(r.month);
   return '<tr><td>'+esc(d)+'</td><td>'+esc(r.sector)+'</td><td>'+esc(r.cat)+'</td><td>'+esc(r.desc||'—')+'</td><td>'+costSrcBadge(r)+'</td><td style="text-align:right;font-weight:800;white-space:nowrap;">'+brl(r.value)+'</td>'
-    +(actions?'<td style="white-space:nowrap;text-align:right;">'+(r.src==='manual'&&isMaster()?'<button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="openCostModal(this.dataset.id)">✏️</button> <button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="deleteCost(this.dataset.id)">🗑</button>':(r.src==='compra'?'<button class="btn btn-outline btn-sm" data-id="'+esc(r.reqId||'')+'" onclick="showDetail(this.dataset.id)">Abrir</button>':''))+'</td>':'')+'</tr>';
+    +(actions?'<td style="white-space:nowrap;text-align:right;">'+(r.src!=='compra'&&isMaster()?'<button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="openCostModal(this.dataset.id)">✏️</button> <button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="deleteCost(this.dataset.id)">🗑</button>':(r.src==='compra'?'<button class="btn btn-outline btn-sm" data-id="'+esc(r.reqId||'')+'" onclick="showDetail(this.dataset.id)">Abrir</button>':''))+'</td>':'')+'</tr>';
 }
 function renderCostList(all,pr){
   var body=document.getElementById('cuBody'), rows=costFilter(all,pr[0],pr[1]).sort(function(a,b){ return String(b.date||b.month).localeCompare(String(a.date||a.month)); });
@@ -2837,7 +2855,7 @@ function openCostModal(id){
   document.getElementById('cmTitle').textContent=c?'✏️ Editar custo':'＋ Lançar custo';
   document.getElementById('cmId').value=c?c.id:'';
   document.getElementById('cmSector').innerHTML=en.map(function(s){ return '<option'+((c?c.sector:COST.sector)===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('');
-  document.getElementById('cmCat').innerHTML=(DB.categories||[]).map(function(s){ return '<option'+((c?c.cat:COST.cat)===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('');
+  document.getElementById('cmCat').innerHTML=costCats().map(function(s){ return '<option'+((c?c.cat:COST.cat)===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('');
   document.getElementById('cmDate').value=c?c.date:new Date().toISOString().slice(0,10);
   document.getElementById('cmValue').value=c?fmtNumBR(c.value):'';
   document.getElementById('cmDesc').value=c?(c.desc||''):'';
@@ -2908,7 +2926,7 @@ function costExport(){
   var all=costAllRows(), pr=costPeriod(all), rows=costFilter(all,pr[0],pr[1]).sort(function(a,b){ return String(a.date||a.month).localeCompare(String(b.date||b.month)); });
   if(!rows.length){ toast('Nada para exportar neste filtro.','error'); return; }
   var q=function(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; };
-  var csv='\ufeffData;Setor;Categoria;Descrição;Origem;Valor\n'+rows.map(function(r){ return [q(r.date||r.month),q(r.sector),q(r.cat),q(r.desc),q(r.src==='compra'?'Compra '+(r.reqId||''):'Manual'),String(r.value.toFixed(2)).replace('.',',')].join(';'); }).join('\n');
+  var csv='\ufeffData;Setor;Categoria;Descrição;Origem;Valor\n'+rows.map(function(r){ return [q(r.date||r.month),q(r.sector),q(r.cat),q(r.desc),q(r.src==='compra'?'Compra '+(r.reqId||''):(r.src==='import'?'Importado':'Manual')),String(r.value.toFixed(2)).replace('.',',')].join(';'); }).join('\n');
   var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='custos_'+pr[0]+'_a_'+pr[1]+'.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
 }
 
@@ -3060,9 +3078,9 @@ function renderCustos(){
   var root=document.getElementById('cuRoot'); if(!root) return;
   var master=isMaster(), en=costEnabled(), stockTab=COST.tab==='stock';
   var all=costAllRows(), pr=costPeriod(stockTab?stockAllRows().map(function(r){ return {month:r.month}; }):all);
-  var cats=(DB.categories||[]);
+  var cats=costCats();
   var h='<div class="cu-top"><div><div class="cu-h">💰 Controle de Custos</div><div class="cu-sub">Acompanhamento por setor, categoria e estoque — visível para todos os usuários</div></div><div class="cu-actions">'
-    +(master?(stockTab?'<button class="btn btn-green btn-sm" onclick="openStockModal()">＋ Lançar movimento</button><button class="btn btn-outline btn-sm" onclick="openStockCfg()">⚙ Estoques</button>':'<button class="btn btn-green btn-sm" onclick="openCostModal()">＋ Lançar custo</button><button class="btn btn-outline btn-sm" onclick="openCostSectors()">⚙ Setores habilitados</button>'):'')
+    +(master?(stockTab?'<button class="btn btn-green btn-sm" onclick="openStockModal()">＋ Lançar movimento</button><button class="btn btn-outline btn-sm" onclick="openStockCfg()">⚙ Estoques</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>':'<button class="btn btn-green btn-sm" onclick="openCostModal()">＋ Lançar custo</button><button class="btn btn-outline btn-sm" onclick="openCostSectors()">⚙ Setores habilitados</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>'):'')
     +'<button class="btn btn-outline btn-sm" onclick="'+(stockTab?'stockExport()':'costExport()')+'">⬇ Exportar CSV</button></div></div>';
   h+='<div class="cu-tabs"><button class="cu-tab'+(COST.tab==='dash'?' on':'')+'" onclick="costSet(\'tab\',\'dash\')">📊 Dashboard</button><button class="cu-tab'+(COST.tab==='list'?' on':'')+'" onclick="costSet(\'tab\',\'list\')">🧾 Lançamentos</button><button class="cu-tab'+(stockTab?' on':'')+'" onclick="costSet(\'tab\',\'stock\')">📦 Estoques</button></div>';
   if(!stockTab && !en.length){
@@ -3081,12 +3099,211 @@ function renderCustos(){
   }
   h+='<div class="db-bar">'+per
     +'<div class="db-f"><label>Setor</label><select class="fc" onchange="costSet(\'sector\',this.value)"><option value="">Todos</option>'+en.map(function(s){ return '<option value="'+esc(s)+'"'+(COST.sector===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('')+'</select></div>'
-    +'<div class="db-f"><label>Categoria</label><select class="fc" onchange="costSet(\'cat\',this.value)"><option value="">Todas</option>'+cats.map(function(c){ return '<option value="'+esc(c)+'"'+(COST.cat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select></div>'
-    +'<div class="db-f"><label>Origem</label><select class="fc" onchange="costSet(\'src\',this.value)"><option value="">Todas</option><option value="compra"'+(COST.src==='compra'?' selected':'')+'>Compras do sistema</option><option value="manual"'+(COST.src==='manual'?' selected':'')+'>Lançamentos manuais</option></select></div>'
+    +'<div class="db-f"><label>Categoria / Estoque</label><select class="fc" onchange="costSet(\'cat\',this.value)"><option value="">Todas</option>'+cats.map(function(c){ return '<option value="'+esc(c)+'"'+(COST.cat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select></div>'
+    +'<div class="db-f"><label>Origem</label><select class="fc" onchange="costSet(\'src\',this.value)"><option value="">Todas</option><option value="compra"'+(COST.src==='compra'?' selected':'')+'>Compras do sistema</option><option value="manual"'+(COST.src==='manual'?' selected':'')+'>Lançamentos manuais</option><option value="import"'+(COST.src==='import'?' selected':'')+'>Importados da planilha</option></select></div>'
     +((COST.sector||COST.cat||COST.src||COST.q)?'<button class="btn btn-outline btn-sm" onclick="costClear()">Limpar filtros</button>':'<span class="db-hint">💡 Clique nos gráficos para filtrar</span>')+'</div>';
   h+='<div id="cuBody"></div>';
   root.innerHTML=h;
   if(COST.tab==='list') renderCostList(all,pr); else renderCostDash(all,pr);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IMPORTAÇÃO DA PLANILHA "ACOMPANHAMENTO DE SETORES" (.xlsx) — somente Master
+//  • Entradas e saídas totais por estoque, por mês        → Estoques
+//  • Saídas por centro de custo (setor) × estoque, por mês → Custos (categoria = estoque de origem)
+//  Importar de novo o mesmo arquivo ATUALIZA os valores (não duplica).
+// ═══════════════════════════════════════════════════════════════════════════
+async function zipRead(buf){
+  var dv=new DataView(buf), u8=new Uint8Array(buf), e=-1, i;
+  for(i=u8.length-22;i>=Math.max(0,u8.length-66000);i--){ if(dv.getUint32(i,true)===0x06054b50){ e=i; break; } }
+  if(e<0) throw new Error('O arquivo não é um .xlsx válido.');
+  var n=dv.getUint16(e+10,true), p=dv.getUint32(e+16,true), files={};
+  for(var k=0;k<n;k++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    var method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true), nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lho=dv.getUint32(p+42,true);
+    files[new TextDecoder().decode(u8.subarray(p+46,p+46+nl))]={method:method,csize:csize,lho:lho};
+    p+=46+nl+el+cl;
+  }
+  return {files:files,u8:u8,dv:dv};
+}
+async function zipGet(z,name){
+  var f=z.files[name]; if(!f) return null;
+  var o=f.lho, nl=z.dv.getUint16(o+26,true), el=z.dv.getUint16(o+28,true), st=o+30+nl+el, data=z.u8.subarray(st,st+f.csize);
+  if(f.method===0) return new TextDecoder().decode(data);
+  if(typeof DecompressionStream==='undefined') throw new Error('Este navegador não consegue abrir .xlsx. Use o Chrome ou o Edge atualizado.');
+  return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+}
+function xmlDoc(t){ return new DOMParser().parseFromString(t,'text/xml'); }
+function colIdx(ref){ var m=/^([A-Z]+)/.exec(ref), n=0; for(var i=0;i<m[1].length;i++) n=n*26+m[1].charCodeAt(i)-64; return n-1; }
+async function xlsxRead(buf){
+  var z=await zipRead(buf), NS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  var shared=[], ss=await zipGet(z,'xl/sharedStrings.xml');
+  if(ss){ Array.prototype.forEach.call(xmlDoc(ss).getElementsByTagName('si'),function(si){
+    var t=''; Array.prototype.forEach.call(si.getElementsByTagName('t'),function(x){ if(!x.parentNode||x.parentNode.nodeName!=='rPh') t+=x.textContent; }); shared.push(t); }); }
+  var wb=xmlDoc(await zipGet(z,'xl/workbook.xml')), rels=xmlDoc(await zipGet(z,'xl/_rels/workbook.xml.rels')), tgt={};
+  Array.prototype.forEach.call(rels.getElementsByTagName('Relationship'),function(r){ tgt[r.getAttribute('Id')]=r.getAttribute('Target'); });
+  var out=[], sh=wb.getElementsByTagName('sheet');
+  for(var s=0;s<sh.length;s++){
+    var name=sh[s].getAttribute('name'), state=sh[s].getAttribute('state')||'visible', rid=sh[s].getAttributeNS(NS,'id')||sh[s].getAttribute('r:id');
+    var path=(tgt[rid]||'').replace(/^\//,''); if(path.indexOf('xl/')!==0) path='xl/'+path;
+    var xml=await zipGet(z,path); if(!xml) continue;
+    var rows=[];
+    Array.prototype.forEach.call(xmlDoc(xml).getElementsByTagName('c'),function(c){
+      var ref=c.getAttribute('r'), t=c.getAttribute('t'), v=c.getElementsByTagName('v')[0], val=null;
+      if(t==='inlineStr'){ val=Array.prototype.map.call(c.getElementsByTagName('t'),function(x){ return x.textContent; }).join(''); }
+      else if(v){ var tx=v.textContent; if(t==='s') val=shared[+tx]; else if(t==='str') val=tx; else if(t==='b') val=tx==='1'; else if(t==='e') val=null; else { val=parseFloat(tx); if(isNaN(val)) val=null; } }
+      if(val===null||val==='') return;
+      var r=parseInt(ref.replace(/[A-Z]+/,''),10)-1; (rows[r]=rows[r]||[])[colIdx(ref)]=val;
+    });
+    out.push({name:name,hidden:state!=='visible',rows:rows});
+  }
+  return out;
+}
+
+function impKey(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function impSlug(s){ return impKey(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+var IMP_ACR={uti:'UTI',cdi:'CDI',rh:'RH',snd:'SND',sesmt:'SESMT',ti:'TI',nir:'NIR',sadt:'SADT'};
+var IMP_ACC={farmacia:'Farmácia',nutricao:'Nutrição',manutencao:'Manutenção',higienizacao:'Higienização',informatica:'Informática',recepcao:'Recepção',emergencia:'Emergência',cirurgico:'Cirúrgico',ambulatorio:'Ambulatório',agencia:'Agência',administracao:'Administração'};
+function impTitle(s){
+  return String(s||'').trim().replace(/\s+/g,' ').split(' ').map(function(w){
+    var k=impKey(w); if(IMP_ACR[k]) return IMP_ACR[k]; if(IMP_ACC[k]) return IMP_ACC[k];
+    if(['de','da','do','das','dos','e'].indexOf(k)>=0) return k;
+    return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();
+  }).join(' ');
+}
+var IMP_MONTHS=['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function impMonth(v){
+  var m=/^([a-z]+)\s+de\s+(\d{4})/.exec(impKey(v)); if(!m) return '';
+  var i=IMP_MONTHS.indexOf(m[1]); return i<0?'':m[2]+'-'+String(i+1).padStart(2,'0');
+}
+function impLastDay(mk){ var d=new Date(+mk.slice(0,4),+mk.slice(5,7),0); return mk+'-'+String(d.getDate()).padStart(2,'0'); }
+function impStockName(h){ return impTitle(String(h||'').replace(/\s+\d+\s*$/,'')); }
+
+// Lê o layout da planilha: TOTAL DE ENTRADAS/SAÍDAS + blocos "SETOR | COD n"
+function impParse(sheets){
+  var res={costs:[],moves:[],sectors:{},stocks:{},months:{},warnings:[],sheets:0};
+  sheets.forEach(function(sh){
+    if(sh.hidden) return;
+    var R=sh.rows, found=false;
+    var cell=function(r,c){ return (R[r]&&R[r][c]!==undefined)?R[r][c]:null; };
+    for(var r=0;r<R.length;r++){
+      if(!R[r]) continue;
+      [0,7].forEach(function(col){
+        var v=cell(r,col); if(typeof v!=='string') return;
+        var k=impKey(v), kind=null, title='';
+        if(k==='total de entradas') kind='in'; else if(k==='total de saidas') kind='out';
+        else if(v.indexOf('|')>0 && impKey(cell(r+1,col))==='mes'){ kind='sector'; title=v; }
+        if(!kind) return;
+        var hr=(kind==='sector')?r+1:r+1;
+        if(impKey(cell(hr,col))!=='mes') return;
+        var heads=[]; for(var c=col+1;c<=col+7;c++){ var h=cell(hr,c); if(typeof h==='string'&&impKey(h)!=='total') heads.push({c:c,name:impStockName(h)}); }
+        var secName='', cod='';
+        if(kind==='sector'){ var parts=title.split('|'); secName=impTitle(parts[0]); cod=(parts[1]||'').trim(); res.sectors[secName]=cod; }
+        for(var rr=hr+1;rr<R.length;rr++){
+          var lab=cell(rr,col); if(typeof lab!=='string') break;
+          var mk=impMonth(lab); if(!mk){ if(/^m[eé]dia|^total/i.test(lab)||impKey(lab).indexOf('media')===0||impKey(lab).indexOf('total')===0) break; else continue; }
+          heads.forEach(function(h){
+            var val=cell(rr,h.c); if(typeof val!=='number'||!(Math.abs(val)>0.004)) return;
+            res.stocks[h.name]=1; res.months[mk]=1; found=true;
+            if(kind==='sector') res.costs.push({sector:secName,cod:cod,stock:h.name,month:mk,value:Math.round(val*100)/100});
+            else res.moves.push({stock:h.name,type:kind,month:mk,value:Math.round(val*100)/100});
+          });
+        }
+      });
+    }
+    if(found) res.sheets++;
+  });
+  if(!res.costs.length&&!res.moves.length) res.warnings.push('Não encontrei dados no formato esperado (blocos "TOTAL DE ENTRADAS", "TOTAL DE SAÍDAS" e "SETOR | COD ...").');
+  return res;
+}
+
+// Casa nomes da planilha com setores/estoques já existentes (sem diferenciar acento e maiúscula)
+function impPlan(p){
+  var knownSec={}, knownStk={};
+  costKnownSectors().forEach(function(s){ knownSec[impKey(s)]=s; }); costEnabled().forEach(function(s){ knownSec[impKey(s)]=s; });
+  stockList().forEach(function(s){ knownStk[impKey(s)]=s; });
+  var secMap={}, stkMap={};
+  Object.keys(p.sectors).forEach(function(s){ secMap[s]=knownSec[impKey(s)]||s; });
+  Object.keys(p.stocks).forEach(function(s){ stkMap[s]=knownStk[impKey(s)]||s; });
+  var cIdx={}, mIdx={}; (DB.costs||[]).forEach(function(c){ cIdx[c.id]=c; }); (DB.stockMoves||[]).forEach(function(m){ mIdx[m.id]=m; });
+  var plan={costs:[],moves:[],secMap:secMap,stkMap:stkMap,cNew:0,cUpd:0,cSame:0,mNew:0,mUpd:0,mSame:0,sumC:0,sumIn:0,sumOut:0};
+  p.costs.forEach(function(c){
+    var sec=secMap[c.sector], stk=stkMap[c.stock], id='IMP-C-'+impSlug(sec)+'-'+impSlug(stk)+'-'+c.month, ex=cIdx[id];
+    var o={id:id,sector:sec,cat:stk,date:impLastDay(c.month),value:c.value,desc:'Saída do '+stk+(c.cod?' (COD '+String(c.cod).replace(/^COD\s*/i,'')+')':'')+' — importado da planilha'};
+    if(!ex) plan.cNew++; else if(Math.abs((Number(ex.value)||0)-c.value)>0.004||ex.sector!==sec||ex.cat!==stk) plan.cUpd++; else { plan.cSame++; return; }
+    plan.costs.push(o); plan.sumC+=c.value;
+  });
+  p.moves.forEach(function(m){
+    var stk=stkMap[m.stock], id='IMP-E-'+impSlug(stk)+'-'+m.type+'-'+m.month, ex=mIdx[id];
+    var o={id:id,stock:stk,type:m.type,date:impLastDay(m.month),value:m.value,desc:'Total do mês — importado da planilha'};
+    if(!ex) plan.mNew++; else if(Math.abs((Number(ex.value)||0)-m.value)>0.004||ex.stock!==stk) plan.mUpd++; else { plan.mSame++; return; }
+    plan.moves.push(o); if(m.type==='in') plan.sumIn+=m.value; else plan.sumOut+=m.value;
+  });
+  return plan;
+}
+
+var _imp=null;
+function openImport(){
+  if(!isMaster()){ toast('Somente o administrador master importa dados.','error'); return; }
+  _imp=null;
+  document.getElementById('impFile').value='';
+  document.getElementById('impBody').innerHTML='<div class="cp-none">Escolha o arquivo <b>.xlsx</b> da planilha de acompanhamento.<br>Importar de novo o mesmo arquivo atualiza os valores, sem duplicar.</div>';
+  document.getElementById('impGo').style.display='none';
+  document.getElementById('impModal').classList.remove('hidden');
+}
+async function impLoad(inp){
+  var f=inp.files&&inp.files[0]; if(!f) return;
+  var body=document.getElementById('impBody'), go=document.getElementById('impGo');
+  go.style.display='none'; body.innerHTML='<div class="cp-none">Lendo a planilha...</div>';
+  try{
+    var p=impParse(await xlsxRead(await f.arrayBuffer())), plan=impPlan(p);
+    if(p.warnings.length&&!p.costs.length&&!p.moves.length){ body.innerHTML='<div class="cp-none" style="color:#c42f2f;">'+esc(p.warnings[0])+'</div>'; return; }
+    _imp={p:p,plan:plan,name:f.name};
+    var months=Object.keys(p.months).sort(), nS=Object.keys(p.sectors).length, nE=Object.keys(p.stocks).length;
+    var sumAllC=p.costs.reduce(function(a,c){ return a+c.value; },0), sumAllIn=0, sumAllOut=0;
+    p.moves.forEach(function(m){ if(m.type==='in') sumAllIn+=m.value; else sumAllOut+=m.value; });
+    var secRows=Object.keys(p.sectors).map(function(s){ var t=p.costs.filter(function(c){ return c.sector===s; }).reduce(function(a,c){ return a+c.value; },0), isNew=costEnabled().indexOf(plan.secMap[s])<0;
+      return '<tr><td>'+esc(plan.secMap[s])+(isNew?' <span class="badge badge-green">novo</span>':'')+'</td><td>'+esc(p.sectors[s])+'</td><td style="text-align:right">'+fmtNumBR(t)+'</td></tr>'; }).join('');
+    var stkRows=Object.keys(p.stocks).map(function(s){ var isNew=stockList().indexOf(plan.stkMap[s])<0; return '<span class="badge '+(isNew?'badge-green':'badge-blue')+'" style="margin:2px;">'+esc(plan.stkMap[s])+(isNew?' • novo':'')+'</span>'; }).join('');
+    body.innerHTML='<div style="font-size:13px;color:var(--ink-2);margin-bottom:10px;"><b>'+esc(f.name)+'</b> — '+mkLabel(months[0])+' a '+mkLabel(months[months.length-1])+' • '+nS+' setores • '+nE+' estoques</div>'
+      +'<div class="cu-kpis" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'
+      +'<div class="stat-card"><div class="stat-lbl">Custos por setor</div><div class="stat-val" style="font-size:15px;">'+brl(sumAllC)+'</div><div class="stat-sub" style="font-size:10.5px;">'+plan.cNew+' novos • '+plan.cUpd+' atualizados • '+plan.cSame+' iguais</div></div>'
+      +'<div class="stat-card"><div class="stat-lbl">Entradas (NF)</div><div class="stat-val" style="font-size:15px;">'+brl(sumAllIn)+'</div><div class="stat-sub">por estoque e mês</div></div>'
+      +'<div class="stat-card yellow"><div class="stat-lbl">Saídas totais</div><div class="stat-val" style="font-size:15px;">'+brl(sumAllOut)+'</div><div class="stat-sub" style="font-size:10.5px;">'+plan.mNew+' novos • '+plan.mUpd+' atualizados • '+plan.mSame+' iguais</div></div></div>'
+      +'<div style="font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin:8px 0 4px;">Estoques</div><div>'+stkRows+'</div>'
+      +'<div style="font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin:10px 0 4px;">Setores (centros de custo)</div><div style="max-height:200px;overflow:auto;"><table class="cu-tbl"><thead><tr><th>Setor</th><th>Cód.</th><th style="text-align:right">Total no arquivo</th></tr></thead><tbody>'+secRows+'</tbody></table></div>'
+      +'<div style="font-size:12px;color:var(--ink-3);margin-top:10px;line-height:1.5;">Os custos entram em <b>Custos</b> (a coluna "estoque" da planilha vira a categoria/estoque de origem) e as entradas e saídas totais entram em <b>Estoques</b>. Setores e estoques novos serão habilitados automaticamente. Cada valor é lançado no último dia do mês.</div>';
+    var nothing=!plan.costs.length&&!plan.moves.length;
+    go.style.display=''; go.disabled=nothing; go.textContent=nothing?'Nada novo para importar':'⬆ Importar '+(plan.costs.length+plan.moves.length)+' lançamento(s)';
+  }catch(e){ body.innerHTML='<div class="cp-none" style="color:#c42f2f;">Não consegui ler o arquivo: '+esc(e.message||e)+'</div>'; }
+}
+function impConfirm(){
+  if(!isMaster()||!_imp) return;
+  var plan=_imp.plan, now=new Date().toISOString(), nf=_imp.name;
+  if(!Array.isArray(DB.costs)) DB.costs=[]; if(!Array.isArray(DB.stockMoves)) DB.stockMoves=[];
+  var cIdx={}, mIdx={}; DB.costs.forEach(function(c){ cIdx[c.id]=c; }); DB.stockMoves.forEach(function(m){ mIdx[m.id]=m; });
+  plan.costs.forEach(function(o){ var ex=cIdx[o.id]; if(ex) Object.assign(ex,o,{updatedAt:now,imported:true}); else DB.costs.push(Object.assign({createdAt:now,updatedAt:now,by:CU.name,imported:true,file:nf},o)); });
+  plan.moves.forEach(function(o){ var ex=mIdx[o.id]; if(ex) Object.assign(ex,o,{updatedAt:now,imported:true}); else DB.stockMoves.push(Object.assign({createdAt:now,updatedAt:now,by:CU.name,imported:true,file:nf,doc:''},o)); });
+  var secs=costEnabled().slice(), hid=costHidden().slice(), chg=false;
+  Object.keys(plan.secMap).forEach(function(k){ var s=plan.secMap[k]; if(secs.indexOf(s)<0){ secs.push(s); chg=true; } var hi=hid.indexOf(s); if(hi>=0){ hid.splice(hi,1); chg=true; } });
+  if(chg||!DB.costCfg) DB.costCfg={sectors:secs.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }),hidden:hid,updatedAt:now};
+  var stk=stockList().slice(), sc=false;
+  Object.keys(plan.stkMap).forEach(function(k){ var s=plan.stkMap[k]; if(stk.indexOf(s)<0){ stk.push(s); sc=true; } });
+  if(sc||!DB.stockCfg) DB.stockCfg={stocks:stk,updatedAt:now};
+  saveDB(); closeModal('impModal'); renderCustos();
+  toast('Importação concluída: '+plan.costs.length+' custos e '+plan.moves.length+' movimentos de estoque.','success');
+}
+function impRemoveAll(){
+  if(!isMaster()) return;
+  var nc=(DB.costs||[]).filter(function(c){ return c.imported; }).length, nm=(DB.stockMoves||[]).filter(function(m){ return m.imported; }).length;
+  if(!nc&&!nm){ toast('Não há dados importados.','info'); return; }
+  if(!confirm('Excluir TODOS os dados importados da planilha ('+nc+' custos e '+nm+' movimentos de estoque)?\n\nLançamentos feitos à mão não são afetados.')) return;
+  var now=new Date().toISOString();
+  DB.deletedCosts=(DB.deletedCosts||[]).concat(DB.costs.filter(function(c){ return c.imported; }).map(function(c){ return {k:String(c.id),at:now}; }));
+  DB.deletedStockMoves=(DB.deletedStockMoves||[]).concat(DB.stockMoves.filter(function(m){ return m.imported; }).map(function(m){ return {k:String(m.id),at:now}; }));
+  DB.costs=DB.costs.filter(function(c){ return !c.imported; }); DB.stockMoves=DB.stockMoves.filter(function(m){ return !m.imported; });
+  saveDB(); closeModal('impModal'); renderCustos(); toast('Dados importados removidos.','success');
 }
 
 function emailUser(req,oldStatus,extra){
