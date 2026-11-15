@@ -880,6 +880,20 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
 .cu-heat td{text-align:right;white-space:nowrap;} .cu-heat th.clk,.cu-heat td.clk{cursor:pointer;} .cu-heat td.clk:hover,.cu-heat th.clk:hover{outline:2px solid var(--mint);outline-offset:-2px;} .cu-heat th.on{color:var(--mint-ink);} .cu-heat tr.tot td,.cu-heat tr.tot th{border-top:2px solid var(--line-2);}
 .cs-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer;background:var(--field);font-size:13.5px;font-weight:700;color:var(--ink);}
 @media(max-width:700px){.vn-bar{grid-template-columns:90px 1fr auto;} .db-grid{grid-template-columns:1fr;} .cu-actions{margin-left:0;}}
+
+/* ═══ PLANILHA / CURVA ABC ═══ */
+.cu-det{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;}
+.cu-det>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 18px;font-weight:900;color:var(--ink);font-family:'Nunito',sans-serif;}
+.cu-det>summary::-webkit-details-marker{display:none;}
+.cu-det>summary::before{content:'▸';color:var(--mint);transition:transform .2s;} .cu-det[open]>summary::before{transform:rotate(90deg);}
+.cu-det[open]>summary{border-bottom:1px solid var(--line);background:var(--field);}
+.cu-dn{font-size:15px;} .cu-dm{margin-left:auto;font-size:14px;color:var(--mint-ink);} .cu-dm small{color:var(--ink-3);font-weight:600;}
+.cu-det .cu-mx{padding:4px 12px 10px;}
+.cu-sheet td{text-align:right;white-space:nowrap;} .cu-sheet th{white-space:nowrap;} .cu-sheet tbody th{font-weight:700;} .cu-sheet th.clk{cursor:pointer;} .cu-sheet th.clk:hover{color:var(--mint-ink);}
+.cu-sheet tr.tot td,.cu-sheet tr.tot th{border-top:2px solid var(--line-2);background:var(--field);} .cu-sheet tr.avg td,.cu-sheet tr.avg th{background:var(--field);color:var(--ink-2);}
+.cu-sheet tbody tr:hover td,.cu-sheet tbody tr:hover th{background:var(--t-ok);}
+.abc-bar{position:relative;height:18px;background:var(--field-2);border-radius:99px;overflow:hidden;} .abc-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#2fbf71,#14b8a6);border-radius:99px;} .abc-bar span{position:relative;font-size:11px;font-weight:800;padding-left:8px;line-height:18px;color:var(--ink);}
+.abc-c{display:inline-block;min-width:22px;text-align:center;border-radius:7px;padding:2px 7px;font-weight:900;font-size:12px;} .abc-A{background:#d9f5e5;color:#0b7a54;} .abc-B{background:#fdf0cf;color:#8a6208;} .abc-C{background:#e8ecef;color:#556;}
 @media print{.vn-bg{display:none!important;}}
 </style>
 </head>
@@ -1381,6 +1395,40 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
     </div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="abcItemModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="mhdr"><h3 id="aiTitle">＋ Item da curva A</h3></div>
+    <div class="mbody" style="color:var(--ink);">
+      <input type="hidden" id="aiId">
+      <div class="row2">
+        <div class="form-group"><label>Setor *</label><select class="fc" id="aiSector"></select></div>
+        <div class="form-group"><label>Competência (mês) *</label><input class="fc" type="month" id="aiMonth"></div>
+      </div>
+      <div class="form-group"><label>Item *</label><input class="fc" type="text" id="aiItem" placeholder="Descrição do item"></div>
+      <div class="row2">
+        <div class="form-group"><label>Categoria</label><select class="fc" id="aiCat"></select></div>
+        <div class="form-group"><label>Quantidade</label><input class="fc" type="text" inputmode="decimal" id="aiQty" placeholder="0"></div>
+      </div>
+      <div class="form-group"><label>Valor total (R$) *</label><input class="fc" type="text" inputmode="decimal" id="aiValue" placeholder="0,00" onblur="this.value=this.value?fmtNumBR(parseMoneyBR(this.value)):''" onkeydown="if(event.key==='Enter')saveAbcItem()"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;"><button class="btn btn-outline" onclick="closeModal('abcItemModal')">Cancelar</button><button class="btn btn-green" onclick="saveAbcItem()">💾 Salvar item</button></div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="abcBulkModal">
+  <div class="modal" style="max-width:620px;">
+    <div class="mhdr"><h3>📋 Colar vários itens da curva A</h3></div>
+    <div class="mbody" style="color:var(--ink);">
+      <div class="row2">
+        <div class="form-group"><label>Setor *</label><select class="fc" id="abSector"></select></div>
+        <div class="form-group"><label>Competência (mês) *</label><input class="fc" type="month" id="abMonth"></div>
+      </div>
+      <div class="form-group"><label>Itens — uma linha por item: <b>Item ; Quantidade ; Valor total</b></label>
+        <textarea class="fc" id="abText" rows="9" oninput="abcBulkPreview()" placeholder="Copie do Excel e cole aqui. Exemplo:&#10;LUVA DE PROCEDIMENTO M ; 1200 ; 3.450,00&#10;SERINGA 10ML ; 800 ; 1.980,50" style="font-family:monospace;font-size:12.5px;"></textarea></div>
+      <div id="abInfo" style="font-size:13px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-outline" onclick="closeModal('abcBulkModal')">Cancelar</button><button class="btn btn-green" id="abGo" onclick="saveAbcBulk()">💾 Adicionar itens</button></div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="approverModal">
   <div class="modal" style="max-width:480px;">
     <div class="mhdr" style="background:linear-gradient(135deg,#d4ac0d,#f1c40f);">
@@ -1575,6 +1623,8 @@ function normalizeDB(d){
   if(!Array.isArray(d.stockMoves)) d.stockMoves=[];
   if(!d.stockCfg||!Array.isArray(d.stockCfg.stocks)) d.stockCfg={stocks:[],updatedAt:''};
   if(!Array.isArray(d.deletedStockMoves)) d.deletedStockMoves=[];
+  if(!Array.isArray(d.abcItems)) d.abcItems=[];
+  if(!Array.isArray(d.deletedAbcItems)) d.deletedAbcItems=[];
   if(dedupeRequestIds(d)) window.__idRepaired = true;
 }
 
@@ -3076,14 +3126,14 @@ function stockExport(){
 // ── Tela principal da aba Custos (abas: Dashboard · Lançamentos · Estoques) ─
 function renderCustos(){
   var root=document.getElementById('cuRoot'); if(!root) return;
-  var master=isMaster(), en=costEnabled(), stockTab=COST.tab==='stock';
+  var master=isMaster(), en=costEnabled(), stockTab=COST.tab==='stock', abcTab=COST.tab==='abc';
   var all=costAllRows(), pr=costPeriod(stockTab?stockAllRows().map(function(r){ return {month:r.month}; }):all);
   var cats=costCats();
   var h='<div class="cu-top"><div><div class="cu-h">💰 Controle de Custos</div><div class="cu-sub">Acompanhamento por setor, categoria e estoque — visível para todos os usuários</div></div><div class="cu-actions">'
-    +(master?(stockTab?'<button class="btn btn-green btn-sm" onclick="openStockModal()">＋ Lançar movimento</button><button class="btn btn-outline btn-sm" onclick="openStockCfg()">⚙ Estoques</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>':'<button class="btn btn-green btn-sm" onclick="openCostModal()">＋ Lançar custo</button><button class="btn btn-outline btn-sm" onclick="openCostSectors()">⚙ Setores habilitados</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>'):'')
-    +'<button class="btn btn-outline btn-sm" onclick="'+(stockTab?'stockExport()':'costExport()')+'">⬇ Exportar CSV</button></div></div>';
-  h+='<div class="cu-tabs"><button class="cu-tab'+(COST.tab==='dash'?' on':'')+'" onclick="costSet(\'tab\',\'dash\')">📊 Dashboard</button><button class="cu-tab'+(COST.tab==='list'?' on':'')+'" onclick="costSet(\'tab\',\'list\')">🧾 Lançamentos</button><button class="cu-tab'+(stockTab?' on':'')+'" onclick="costSet(\'tab\',\'stock\')">📦 Estoques</button></div>';
-  if(!stockTab && !en.length){
+    +(master?(abcTab?'<button class="btn btn-green btn-sm" onclick="openAbcModal()">＋ Item da curva A</button><button class="btn btn-outline btn-sm" onclick="openAbcBulk()">📋 Colar itens</button>':stockTab?'<button class="btn btn-green btn-sm" onclick="openStockModal()">＋ Lançar movimento</button><button class="btn btn-outline btn-sm" onclick="openStockCfg()">⚙ Estoques</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>':'<button class="btn btn-green btn-sm" onclick="openCostModal()">＋ Lançar custo</button><button class="btn btn-outline btn-sm" onclick="openCostSectors()">⚙ Setores habilitados</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>'):'')
+    +'<button class="btn btn-outline btn-sm" onclick="'+(stockTab?'stockExport()':abcTab?'abcExport()':COST.tab==='sheet'?'sheetExport()':'costExport()')+'">⬇ Exportar CSV</button></div></div>';
+  h+='<div class="cu-tabs"><button class="cu-tab'+(COST.tab==='dash'?' on':'')+'" onclick="costSet(\'tab\',\'dash\')">📊 Dashboard</button><button class="cu-tab'+(COST.tab==='list'?' on':'')+'" onclick="costSet(\'tab\',\'list\')">🧾 Lançamentos</button><button class="cu-tab'+(COST.tab==='sheet'?' on':'')+'" onclick="costSet(\'tab\',\'sheet\')">📋 Planilha</button><button class="cu-tab'+(abcTab?' on':'')+'" onclick="costSet(\'tab\',\'abc\')">🏆 Curva A</button><button class="cu-tab'+(stockTab?' on':'')+'" onclick="costSet(\'tab\',\'stock\')">📦 Estoques</button></div>';
+  if(!stockTab && !abcTab && !en.length){
     h+='<div class="cu-card" style="text-align:center;padding:40px 20px;"><div style="font-size:44px;">🏥</div><div style="font-weight:900;font-size:15px;margin:8px 0;">Nenhum setor habilitado para controle de custos</div><div style="color:var(--ink-2);font-size:13px;margin-bottom:14px;">'
       +(master?'Escolha os setores que terão custos acompanhados e depois lance os custos por categoria.':'O administrador master ainda não habilitou setores para acompanhamento.')+'</div>'
       +(master?'<button class="btn btn-green" onclick="openCostSectors()">⚙ Habilitar setores</button>':'')+'</div>';
@@ -3097,6 +3147,15 @@ function renderCustos(){
       +((COST.stock||COST.stype)?'<button class="btn btn-outline btn-sm" onclick="COST.stock=\'\';COST.stype=\'\';renderCustos()">Limpar filtros</button>':'<span class="db-hint">💡 Clique nos gráficos para filtrar</span>')+'</div><div id="cuBody"></div>';
     root.innerHTML=h; renderCostStock(); return;
   }
+  if(abcTab){
+    var asec=abcSectors();
+    h+='<div class="db-bar">'+per
+      +'<div class="db-f"><label>Setor</label><select class="fc" onchange="costSet(\'sector\',this.value)"><option value="">Todos os setores</option>'+asec.map(function(x){ return '<option value="'+esc(x)+'"'+(COST.sector===x?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select></div>'
+      +'<div class="db-f"><label>Categoria do item</label><select class="fc" onchange="costSet(\'cat\',this.value)"><option value="">Todas</option>'+(DB.categories||[]).map(function(c){ return '<option value="'+esc(c)+'"'+(COST.cat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select></div>'
+      +'<div class="db-f"><label>Base</label><select class="fc" onchange="costSet(\'abcBase\',this.value)"><option value="inf"'+(COST.abcBase==='inf'?' selected':'')+'>Itens informados (curva A)</option><option value="rec"'+(COST.abcBase==='rec'?' selected':'')+'>Compras recebidas no sistema</option><option value="all"'+(COST.abcBase==='all'?' selected':'')+'>Todos solicitados (com valor)</option></select></div>'
+      +'<div class="db-f"><label>Mostrar</label><select class="fc" onchange="costSet(\'abcMode\',this.value)"><option value="A"'+(COST.abcMode==='A'?' selected':'')+'>20 principais da curva A</option><option value="top"'+(COST.abcMode==='top'?' selected':'')+'>Top 20 geral</option></select></div></div><div id="cuBody"></div>';
+    root.innerHTML=h; renderCostAbc(); return;
+  }
   h+='<div class="db-bar">'+per
     +'<div class="db-f"><label>Setor</label><select class="fc" onchange="costSet(\'sector\',this.value)"><option value="">Todos</option>'+en.map(function(s){ return '<option value="'+esc(s)+'"'+(COST.sector===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('')+'</select></div>'
     +'<div class="db-f"><label>Categoria / Estoque</label><select class="fc" onchange="costSet(\'cat\',this.value)"><option value="">Todas</option>'+cats.map(function(c){ return '<option value="'+esc(c)+'"'+(COST.cat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</select></div>'
@@ -3104,7 +3163,7 @@ function renderCustos(){
     +((COST.sector||COST.cat||COST.src||COST.q)?'<button class="btn btn-outline btn-sm" onclick="costClear()">Limpar filtros</button>':'<span class="db-hint">💡 Clique nos gráficos para filtrar</span>')+'</div>';
   h+='<div id="cuBody"></div>';
   root.innerHTML=h;
-  if(COST.tab==='list') renderCostList(all,pr); else renderCostDash(all,pr);
+  if(COST.tab==='list') renderCostList(all,pr); else if(COST.tab==='sheet') renderCostSheet(all,pr); else renderCostDash(all,pr);
 }
 
 
@@ -3304,6 +3363,210 @@ function impRemoveAll(){
   DB.deletedStockMoves=(DB.deletedStockMoves||[]).concat(DB.stockMoves.filter(function(m){ return m.imported; }).map(function(m){ return {k:String(m.id),at:now}; }));
   DB.costs=DB.costs.filter(function(c){ return !c.imported; }); DB.stockMoves=DB.stockMoves.filter(function(m){ return !m.imported; });
   saveDB(); closeModal('impModal'); renderCustos(); toast('Dados importados removidos.','success');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PLANILHA POR SETOR (lista) + CURVA A (ABC) DOS ITENS POR SETOR
+// ═══════════════════════════════════════════════════════════════════════════
+COST.abcBase='rec'; COST.abcMode='A';
+function cuNum(v){ return v?fmtNumBR(v):'<span style="opacity:.3">—</span>'; }
+
+// ── Planilha: resumo Setor × Mês + um bloco (Mês × Estoque/Categoria) por setor ─
+function renderCostSheet(all,pr){
+  var body=document.getElementById('cuBody'), rows=costFilter(all,pr[0],pr[1]);
+  var months=mkRange(pr[0],pr[1]); if(months.length>24) months=months.slice(-24);
+  var secs=costEnabled().filter(function(s){ return !COST.sector||s===COST.sector; });
+  var M={}, ST={}; rows.forEach(function(r){ var o=M[r.sector]=M[r.sector]||{}; o[r.month]=(o[r.month]||0)+r.value; ST[r.sector]=(ST[r.sector]||0)+r.value; });
+  secs=secs.slice().sort(function(a,b){ return (ST[b]||0)-(ST[a]||0); });
+  var grand=costSum(rows), nm=Math.max(1,months.length);
+  var h='<div class="cu-card" style="margin-bottom:16px;"><div class="db-h">📋 Resumo por setor e mês <small>valores em R$</small></div><div class="cu-mx"><table class="cu-tbl cu-sheet"><thead><tr><th>Setor</th>'
+    +months.map(function(m){ return '<th>'+mkLabel(m)+'</th>'; }).join('')+'<th>Total</th><th>Média/mês</th><th>%</th></tr></thead><tbody>';
+  secs.forEach(function(s){
+    h+='<tr><th class="clk" data-s="'+esc(s)+'" title="Ver só este setor">'+esc(s)+'</th>'+months.map(function(m){ return '<td>'+cuNum((M[s]||{})[m])+'</td>'; }).join('')
+      +'<td><b>'+fmtNumBR(ST[s]||0)+'</b></td><td>'+fmtNumBR((ST[s]||0)/nm)+'</td><td>'+(grand?((ST[s]||0)/grand*100).toFixed(1).replace('.',',')+'%':'—')+'</td></tr>';
+  });
+  h+='<tr class="tot"><th>Total</th>'+months.map(function(m){ var tv=secs.reduce(function(a,s){ return a+((M[s]||{})[m]||0); },0); return '<td><b>'+(tv?fmtNumBR(tv):'<span style="opacity:.3">—</span>')+'</b></td>'; }).join('')+'<td><b>'+fmtNumBR(grand)+'</b></td><td><b>'+fmtNumBR(grand/nm)+'</b></td><td>100%</td></tr></tbody></table></div></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin:6px 2px 10px;"><div class="db-h" style="margin:0;">🏥 Planilha de cada setor <small>mês × categoria / estoque</small></div><div class="db-tools"><button class="btn btn-outline btn-sm" onclick="cuToggleAll(true)">Expandir todos</button><button class="btn btn-outline btn-sm" onclick="cuToggleAll(false)">Recolher todos</button></div></div>';
+  secs.forEach(function(s,si){
+    var sr=rows.filter(function(r){ return r.sector===s; });
+    var cats=costCats().filter(function(c){ return sr.some(function(r){ return r.cat===c; }); });
+    var cell={}, rowT={}, colT={}; sr.forEach(function(r){ cell[r.month+'\u0001'+r.cat]=(cell[r.month+'\u0001'+r.cat]||0)+r.value; rowT[r.month]=(rowT[r.month]||0)+r.value; colT[r.cat]=(colT[r.cat]||0)+r.value; });
+    var withData=months.filter(function(m){ return rowT[m]>0; }).length;
+    h+='<details class="cu-det"'+((COST.sector||si===0)?' open':'')+'><summary><span class="cu-dn">'+esc(s)+'</span><span class="cu-dm">'+brl(ST[s]||0)+' <small>• média '+brl((ST[s]||0)/Math.max(1,withData))+'/mês</small></span></summary>';
+    if(!sr.length) h+='<div class="vn-empty">Sem lançamentos no período.</div>';
+    else{
+      h+='<div class="cu-mx"><table class="cu-tbl cu-sheet"><thead><tr><th>Mês</th>'+cats.map(function(c){ return '<th>'+esc(c)+'</th>'; }).join('')+'<th>Total</th></tr></thead><tbody>';
+      months.forEach(function(m){ h+='<tr><th>'+esc(mkFull(m).replace(' de ','/').replace(/^./,function(x){ return x.toUpperCase(); }))+'</th>'+cats.map(function(c){ return '<td>'+cuNum(cell[m+'\u0001'+c])+'</td>'; }).join('')+'<td><b>'+(rowT[m]?fmtNumBR(rowT[m]):'<span style="opacity:.3">—</span>')+'</b></td></tr>'; });
+      h+='<tr class="avg"><th>Média (meses com valor)</th>'+cats.map(function(c){ return '<td>'+fmtNumBR((colT[c]||0)/Math.max(1,withData))+'</td>'; }).join('')+'<td><b>'+fmtNumBR((ST[s]||0)/Math.max(1,withData))+'</b></td></tr>'
+        +'<tr class="tot"><th>Total</th>'+cats.map(function(c){ return '<td><b>'+fmtNumBR(colT[c]||0)+'</b></td>'; }).join('')+'<td><b>'+fmtNumBR(ST[s]||0)+'</b></td></tr></tbody></table></div>';
+    }
+    h+='</details>';
+  });
+  body.innerHTML=h;
+  Array.prototype.forEach.call(body.querySelectorAll('th[data-s]'),function(n){ n.onclick=function(){ costTog('sector',n.dataset.s); }; });
+}
+function cuToggleAll(open){ Array.prototype.forEach.call(document.querySelectorAll('#cuBody details.cu-det'),function(d){ d.open=open; }); }
+function sheetExport(){
+  var all=costAllRows(), pr=costPeriod(all), rows=costFilter(all,pr[0],pr[1]), months=mkRange(pr[0],pr[1]);
+  if(!rows.length){ toast('Nada para exportar neste filtro.','error'); return; }
+  var secs=costEnabled().filter(function(s){ return !COST.sector||s===COST.sector; }), q=function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; };
+  var csv='\ufeff'+['Setor'].concat(months.map(mkLabel),['Total']).map(q).join(';')+'\n';
+  secs.forEach(function(s){ var t=0; var cells=months.map(function(m){ var v=rows.filter(function(r){ return r.sector===s&&r.month===m; }).reduce(function(a,r){ return a+r.value; },0); t+=v; return v.toFixed(2).replace('.',','); }); csv+=[q(s)].concat(cells,[t.toFixed(2).replace('.',',')]).join(';')+'\n'; });
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='planilha_setores_'+pr[0]+'_a_'+pr[1]+'.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+
+// ── Curva A (ABC) por setor — itens comprados pelo sistema ──────────────────
+function abcRows(){
+  var base=COST.abcBase, out=[];
+  if(base==='inf') return abcInfRows();
+  (DB.requests||[]).forEach(function(r){
+    if(r.status>=9) return; var sec=reqSector(r); if(!sec||sec==='—') return;
+    (r.items||[]).forEach(function(it){
+      var v=Number(it.valorUnit)||0; if(v<=0) return; var q=0;
+      if(base==='all') q=Number(it.qty)||0;
+      else if(it.itemStatus===2) q=(it.qtdRecebida>0?it.qtdRecebida:it.qty); else if(it.itemStatus===1) q=it.qtdRecebida||0; else return;
+      if(!(q>0)) return;
+      var mk=mkKey(base==='all'?(r.createdAt||r.date):(it.updatedAt||r.updatedAt||r.createdAt)); if(!mk) return;
+      out.push({sector:sec,item:String(it.desc||'Item').trim(),key:impKey(it.desc),cat:it.cat||'Sem categoria',qty:q,value:v*q,month:mk});
+    });
+  });
+  return out;
+}
+function abcSectors(){ var m={}; abcRows().forEach(function(r){ m[r.sector]=1; }); return Object.keys(m).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }); }
+function abcCompute(){
+  var pr=costPeriod([]), rows=abcRows().filter(function(r){ return r.month>=pr[0]&&r.month<=pr[1]&&(!COST.sector||r.sector===COST.sector)&&(!COST.cat||r.cat===COST.cat); });
+  var by={}; rows.forEach(function(r){ var s=by[r.sector]=by[r.sector]||{}, o=s[r.key]=s[r.key]||{item:r.item,cat:r.cat,qty:0,value:0}; o.qty+=r.qty; o.value+=r.value; });
+  return Object.keys(by).map(function(sec){
+    var list=Object.keys(by[sec]).map(function(k){ return by[sec][k]; }).sort(function(a,b){ return b.value-a.value; }), sumI=list.reduce(function(a,i){ return a+i.value; },0), tot=sumI, cum=0, inf=COST.abcBase==='inf';
+    if(inf){ var secCost=costSum(costFilter(costAllRows(),pr[0],pr[1],'cat').filter(function(r){ return r.sector===sec; })); if(secCost>sumI) tot=secCost; }
+    list.forEach(function(i,ix){ var before=cum/tot; cum+=i.value; i.rank=ix+1; i.pct=tot?i.value/tot*100:0; i.cum=tot?cum/tot*100:0; i.cls=inf?'A':(before<.8?'A':(before<.95?'B':'C')); i.avg=i.qty?i.value/i.qty:0; });
+    return {sector:sec,total:tot,sumItems:sumI,inf:inf,n:list.length,nA:list.filter(function(i){ return i.cls==='A'; }).length,list:list};
+  }).sort(function(a,b){ return b.total-a.total; });
+}
+function abcShown(g){ var l=COST.abcMode==='A'?g.list.filter(function(i){ return i.cls==='A'; }):g.list; return l.slice(0,20); }
+function renderCostAbc(){
+  var body=document.getElementById('cuBody'), groups=abcCompute();
+  if(!groups.length){ body.innerHTML='<div class="cu-card" style="text-align:center;padding:36px 20px;"><div style="font-size:42px;">🏆</div><div style="font-weight:900;margin:8px 0;">Sem itens para a curva ABC neste filtro</div>'+(COST.abcBase==='inf'?'<div style="font-size:13px;color:var(--ink-2);line-height:1.6;">'+(isMaster()?'Digite os itens da curva A de cada setor em <b>＋ Item da curva A</b> ou cole vários de uma vez em <b>📋 Colar itens</b>.':'O administrador master ainda não informou itens da curva A.')+'</div>':'<div style="font-size:13px;color:var(--ink-2);line-height:1.6;">A curva A usa os itens das solicitações de compra que têm <b>valor unitário</b> informado e foram recebidos (ou, em "Base", todos os solicitados com valor), agrupados por setor do requisitante.</div>')+'</div>'; return; }
+  var h='<div style="font-size:12.5px;color:var(--ink-2);margin:0 2px 10px;line-height:1.5;">'+(COST.abcBase==='inf'?'Itens da <b>curva A informados</b> para cada setor, ordenados pelo custo. O percentual é calculado sobre o <b>custo total do setor</b> no período (quando houver) — mostrando os 20 de maior valor.':'Itens das <b>solicitações de compra</b> de cada setor, ordenados pelo custo. <b>Curva A</b> = itens que somam até 80% do custo do setor (B até 95%; C o restante). Mostrando '+(COST.abcMode==='A'?'os 20 principais itens da curva A':'os 20 itens de maior custo')+' de cada setor.')+'</div>'
+    +'<div class="db-tools" style="margin:0 0 10px 2px;"><button class="btn btn-outline btn-sm" onclick="cuToggleAll(true)">Expandir todos</button><button class="btn btn-outline btn-sm" onclick="cuToggleAll(false)">Recolher todos</button></div>';
+  groups.forEach(function(g,gi){
+    var sh=abcShown(g);
+    h+='<details class="cu-det"'+((COST.sector||gi===0)?' open':'')+'><summary><span class="cu-dn">'+esc(g.sector)+'</span><span class="cu-dm">'+brl(g.inf?g.sumItems:g.total)+' <small>• '+g.n+' itens'+(g.inf?' • '+(g.total?(g.sumItems/g.total*100).toFixed(0):0)+'% do custo do setor':' • curva A: '+g.nA+' ('+(g.n?Math.round(g.nA/g.n*100):0)+'% dos itens = 80% do custo)')+'</small></span></summary>'
+      +'<div class="cu-mx"><table class="cu-tbl"><thead><tr><th>#</th><th>Item</th><th>Categoria</th><th style="text-align:right">Qtd</th><th style="text-align:right">Preço médio</th><th style="text-align:right">Custo total</th><th>% do setor</th><th style="text-align:right">% acum.</th><th>Classe</th></tr></thead><tbody>'
+      +sh.map(function(i){ return '<tr><td>'+i.rank+'</td><td><b>'+esc(i.item)+'</b></td><td>'+esc(i.cat)+'</td><td style="text-align:right">'+Number(i.qty).toLocaleString('pt-BR')+'</td><td style="text-align:right">'+fmtNumBR(i.avg)+'</td><td style="text-align:right;font-weight:800;">'+fmtNumBR(i.value)+'</td>'
+        +'<td style="min-width:120px;"><div class="abc-bar"><i style="width:'+Math.min(100,i.pct*2.2)+'%"></i><span>'+i.pct.toFixed(1).replace('.',',')+'%</span></div></td><td style="text-align:right">'+i.cum.toFixed(1).replace('.',',')+'%</td><td><span class="abc-c abc-'+i.cls+'">'+i.cls+'</span></td></tr>'; }).join('')
+      +'</tbody></table></div>'+(!g.inf&&COST.abcMode==='A'&&g.nA<20?'<div class="db-hint" style="padding:8px 4px;">A curva A deste setor tem '+g.nA+' iten(s). Mude "Mostrar" para "Top 20 geral" para ver mais.</div>':'')+'</details>';
+  });
+  if(COST.abcBase==='inf') h+=renderAbcInfList();
+  body.innerHTML=h;
+}
+function abcExport(){
+  var g=abcCompute(); if(!g.length){ toast('Nada para exportar neste filtro.','error'); return; }
+  var q=function(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }, n=function(v){ return Number(v).toFixed(2).replace('.',','); };
+  var csv='\ufeffSetor;#;Item;Categoria;Qtd;Preço médio;Custo total;% do setor;% acumulado;Classe\n';
+  g.forEach(function(s){ abcShown(s).forEach(function(i){ csv+=[q(s.sector),i.rank,q(i.item),q(i.cat),n(i.qty),n(i.avg),n(i.value),n(i.pct),n(i.cum),i.cls].join(';')+'\n'; }); });
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='curva_abc_por_setor.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ITENS DA CURVA A INFORMADOS À MÃO (digitados ou colados) — somente Master
+//  Cada item: setor, competência (mês), descrição, categoria (opcional), quantidade e valor total.
+// ═══════════════════════════════════════════════════════════════════════════
+COST.abcBase='inf';
+function abcInfRows(){
+  return (DB.abcItems||[]).map(function(i){ return {id:i.id,sector:i.sector,item:String(i.item||'').trim(),key:impKey(i.item),cat:i.cat||'Sem categoria',qty:Number(i.qty)||0,value:Number(i.value)||0,month:String(i.month||'').slice(0,7)}; })
+    .filter(function(r){ return r.sector&&r.item&&r.month; });
+}
+function abcAllSectors(){
+  var m={}; costKnownSectors().forEach(function(s){ m[s]=1; }); (DB.abcItems||[]).forEach(function(i){ if(i.sector) m[i.sector]=1; });
+  return Object.keys(m).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+}
+function abcFillSectors(id,sel){
+  var list=abcAllSectors(), cur=sel||COST.sector||'';
+  document.getElementById(id).innerHTML=list.map(function(s){ return '<option'+(s===cur?' selected':'')+'>'+esc(s)+'</option>'; }).join('');
+}
+function abcMonthDefault(){ var pr=costPeriod([]); return pr[1]||mkKey(new Date()); }
+
+function openAbcModal(id){
+  if(!isMaster()){ toast('Somente o administrador master informa itens da curva A.','error'); return; }
+  var it=id?(DB.abcItems||[]).find(function(x){ return x.id===id; }):null;
+  document.getElementById('aiTitle').textContent=it?'✏️ Editar item da curva A':'＋ Item da curva A';
+  document.getElementById('aiId').value=it?it.id:'';
+  abcFillSectors('aiSector',it?it.sector:'');
+  document.getElementById('aiMonth').value=it?it.month:abcMonthDefault();
+  document.getElementById('aiItem').value=it?it.item:'';
+  document.getElementById('aiCat').innerHTML='<option value="">— sem categoria —</option>'+(DB.categories||[]).map(function(c){ return '<option'+(it&&it.cat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('');
+  document.getElementById('aiQty').value=it&&it.qty?String(it.qty).replace('.',','):'';
+  document.getElementById('aiValue').value=it?fmtNumBR(it.value):'';
+  document.getElementById('abcItemModal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('aiItem').focus(); },60);
+}
+function saveAbcItem(){
+  if(!isMaster()) return;
+  var o={sector:document.getElementById('aiSector').value,month:document.getElementById('aiMonth').value,item:document.getElementById('aiItem').value.trim(),cat:document.getElementById('aiCat').value,qty:parseMoneyBR(document.getElementById('aiQty').value),value:parseMoneyBR(document.getElementById('aiValue').value)};
+  if(!o.sector){ toast('Escolha o setor.','error'); return; }
+  if(!o.month){ toast('Informe a competência (mês).','error'); return; }
+  if(!o.item){ toast('Informe a descrição do item.','error'); return; }
+  if(!(o.value>0)){ toast('Informe o valor total do item.','error'); return; }
+  var now=new Date().toISOString(), id=document.getElementById('aiId').value;
+  if(!Array.isArray(DB.abcItems)) DB.abcItems=[];
+  if(id){ var x=DB.abcItems.find(function(i){ return i.id===id; }); if(!x) return; Object.assign(x,o,{updatedAt:now}); }
+  else DB.abcItems.push(Object.assign({id:'A'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),createdAt:now,updatedAt:now,by:CU.name},o));
+  saveDB(); closeModal('abcItemModal'); toast('Item salvo.','success'); COST.abcBase='inf'; renderCustos();
+}
+function deleteAbcItem(id){
+  if(!isMaster()) return;
+  var x=(DB.abcItems||[]).find(function(i){ return i.id===id; }); if(!x) return;
+  if(!confirm('Excluir o item "'+x.item+'" ('+x.sector+', '+mkLabel(x.month)+')?')) return;
+  DB.abcItems=DB.abcItems.filter(function(i){ return i.id!==id; });
+  DB.deletedAbcItems=(DB.deletedAbcItems||[]).concat([{k:String(id),at:new Date().toISOString()}]);
+  saveDB(); toast('Item excluído.','success'); renderCustos();
+}
+
+// Colar vários itens (do Excel, de um relatório...) — colunas: Item ; Quantidade ; Valor total
+function abcParseBulk(text){
+  var ok=[], bad=0;
+  String(text||'').split(/\r?\n/).forEach(function(line){
+    line=line.trim(); if(!line) return;
+    var parts=line.indexOf('\t')>=0?line.split('\t'):(line.indexOf(';')>=0?line.split(';'):line.split(/\s{2,}/));
+    parts=parts.map(function(x){ return x.trim(); }).filter(function(x,i){ return x!==''||i===0; });
+    if(parts.length<2){ bad++; return; }
+    var item=parts[0], qty=0, val=0;
+    if(parts.length===2){ val=parseMoneyBR(parts[1]); } else { qty=parseMoneyBR(parts[1]); val=parseMoneyBR(parts[2]); }
+    if(!item||!(val>0)){ if(ok.length||/\d/.test(parts[parts.length-1])) bad++; return; }
+    ok.push({item:item,qty:qty,value:val});
+  });
+  return {ok:ok,bad:bad};
+}
+function openAbcBulk(){
+  if(!isMaster()){ toast('Somente o administrador master informa itens da curva A.','error'); return; }
+  abcFillSectors('abSector'); document.getElementById('abMonth').value=abcMonthDefault(); document.getElementById('abText').value='';
+  abcBulkPreview(); document.getElementById('abcBulkModal').classList.remove('hidden');
+}
+function abcBulkPreview(){
+  var r=abcParseBulk(document.getElementById('abText').value), tot=r.ok.reduce(function(a,i){ return a+i.value; },0);
+  document.getElementById('abInfo').innerHTML=r.ok.length?'<b>'+r.ok.length+'</b> item(ns) reconhecido(s) • total <b>'+brl(tot)+'</b>'+(r.bad?' • <span style="color:#c42f2f;">'+r.bad+' linha(s) ignorada(s)</span>':''):'<span style="color:var(--ink-3);">Cole as linhas acima. Cada linha: <b>Item ; Quantidade ; Valor total</b>.</span>';
+  document.getElementById('abGo').disabled=!r.ok.length;
+}
+function saveAbcBulk(){
+  if(!isMaster()) return;
+  var sec=document.getElementById('abSector').value, mo=document.getElementById('abMonth').value, r=abcParseBulk(document.getElementById('abText').value);
+  if(!sec||!mo){ toast('Escolha o setor e a competência.','error'); return; }
+  if(!r.ok.length) return;
+  var now=new Date().toISOString(); if(!Array.isArray(DB.abcItems)) DB.abcItems=[];
+  r.ok.forEach(function(i,ix){ DB.abcItems.push({id:'A'+Date.now().toString(36)+ix+Math.random().toString(36).slice(2,5),createdAt:now,updatedAt:now,by:CU.name,sector:sec,month:mo,item:i.item,cat:'',qty:i.qty,value:i.value}); });
+  saveDB(); closeModal('abcBulkModal'); COST.abcBase='inf'; COST.sector=sec; renderCustos(); toast(r.ok.length+' item(ns) adicionado(s) a '+sec+'.','success');
+}
+function renderAbcInfList(){
+  var pr=costPeriod([]), rows=abcInfRows().filter(function(r){ return r.month>=pr[0]&&r.month<=pr[1]&&(!COST.sector||r.sector===COST.sector)&&(!COST.cat||r.cat===COST.cat); }).sort(function(a,b){ return b.month.localeCompare(a.month)||a.sector.localeCompare(b.sector)||b.value-a.value; });
+  if(!rows.length) return '';
+  var master=isMaster();
+  return '<details class="cu-det" style="margin-top:16px;"><summary><span class="cu-dn">🧾 Itens informados</span><span class="cu-dm">'+rows.length+' lançamento(s)</span></summary><div class="cu-mx"><table class="cu-tbl"><thead><tr><th>Mês</th><th>Setor</th><th>Item</th><th>Categoria</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor total</th><th></th></tr></thead><tbody>'
+    +rows.slice(0,300).map(function(r){ return '<tr><td>'+mkLabel(r.month)+'</td><td>'+esc(r.sector)+'</td><td><b>'+esc(r.item)+'</b></td><td>'+esc(r.cat==='Sem categoria'?'—':r.cat)+'</td><td style="text-align:right">'+(r.qty?Number(r.qty).toLocaleString('pt-BR'):'—')+'</td><td style="text-align:right;font-weight:800;">'+fmtNumBR(r.value)+'</td>'
+      +'<td style="text-align:right;white-space:nowrap;">'+(master?'<button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="openAbcModal(this.dataset.id)">✏️</button> <button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="deleteAbcItem(this.dataset.id)">🗑</button>':'')+'</td></tr>'; }).join('')
+    +'</tbody></table></div></details>';
 }
 
 function emailUser(req,oldStatus,extra){
@@ -5419,6 +5682,10 @@ function dbMerge(a,b){
     else { out.stockCfg=scA; needsB=true; }
   }
   out.deletedStockMoves=Object.keys(ts2).map(function(k){ return {k:k,at:ts2[k]}; });
+  // ── CURVA A (itens informados): por id + exclusões registradas
+  var ta=tomb((a.deletedAbcItems||[]).concat(b.deletedAbcItems||[]));
+  out.abcItems=mergeList(a.abcItems,b.abcItems,function(c){ return String(c.id); },ta);
+  out.deletedAbcItems=Object.keys(ta).map(function(k){ return {k:k,at:ta[k]}; });
   var pick=(String(a._savedAt||'')>String(b._savedAt||''))?a:b;
   if(pick.categories||a.categories||b.categories) out.categories=pick.categories||a.categories||b.categories;
   if(pick.statusLabels||a.statusLabels||b.statusLabels) out.statusLabels=pick.statusLabels||a.statusLabels||b.statusLabels;
@@ -5757,7 +6024,7 @@ new MutationObserver(function(ms){
 window.addEventListener('DOMContentLoaded',function(){
   // 1. Carregar dados locais como fallback
   const stored=sessionStorage.getItem('hlr_sol_v1');
-  if(stored){ try{ const p=JSON.parse(stored); DB.users=p.users||DB.users; DB.requests=p.requests||DB.requests; DB.categories=p.categories||DB.categories; DB.nextId=p.nextId||DB.nextId; DB.statusLabels=p.statusLabels||DB.statusLabels; DB.costs=p.costs||DB.costs; DB.costCfg=p.costCfg||DB.costCfg; DB.deletedCosts=p.deletedCosts||DB.deletedCosts; DB.stockMoves=p.stockMoves||DB.stockMoves; DB.stockCfg=p.stockCfg||DB.stockCfg; DB.deletedStockMoves=p.deletedStockMoves||DB.deletedStockMoves; }catch(e){} }
+  if(stored){ try{ const p=JSON.parse(stored); DB.users=p.users||DB.users; DB.requests=p.requests||DB.requests; DB.categories=p.categories||DB.categories; DB.nextId=p.nextId||DB.nextId; DB.statusLabels=p.statusLabels||DB.statusLabels; DB.costs=p.costs||DB.costs; DB.costCfg=p.costCfg||DB.costCfg; DB.deletedCosts=p.deletedCosts||DB.deletedCosts; DB.stockMoves=p.stockMoves||DB.stockMoves; DB.stockCfg=p.stockCfg||DB.stockCfg; DB.deletedStockMoves=p.deletedStockMoves||DB.deletedStockMoves; DB.abcItems=p.abcItems||DB.abcItems; DB.deletedAbcItems=p.deletedAbcItems||DB.deletedAbcItems; }catch(e){} }
   normalizeDB(DB);
   flushIdRepair();
   // 2. Mostrar barra de status e iniciar conexão com GAS
