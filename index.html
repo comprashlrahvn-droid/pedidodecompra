@@ -1429,6 +1429,16 @@ input[type=file]::file-selector-button:hover{background:rgba(47,227,160,.16);bor
     </div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="sighModal">
+  <div class="modal" style="max-width:660px;">
+    <div class="mhdr"><h3>📄 Importar Curva ABC (PDF do SIGH)</h3></div>
+    <div class="mbody" style="color:var(--ink);">
+      <input type="file" id="sgFile" accept="application/pdf,.pdf" class="fc" onchange="sighLoad(this)" style="margin-bottom:12px;">
+      <div id="sgBody"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-outline" onclick="closeModal('sighModal')">Cancelar</button><button class="btn btn-green" id="sgGo" style="display:none;" onclick="sighConfirm()">⬆ Importar</button></div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="approverModal">
   <div class="modal" style="max-width:480px;">
     <div class="mhdr" style="background:linear-gradient(135deg,#d4ac0d,#f1c40f);">
@@ -3130,7 +3140,7 @@ function renderCustos(){
   var all=costAllRows(), pr=costPeriod(stockTab?stockAllRows().map(function(r){ return {month:r.month}; }):all);
   var cats=costCats();
   var h='<div class="cu-top"><div><div class="cu-h">💰 Controle de Custos</div><div class="cu-sub">Acompanhamento por setor, categoria e estoque — visível para todos os usuários</div></div><div class="cu-actions">'
-    +(master?(abcTab?'<button class="btn btn-green btn-sm" onclick="openAbcModal()">＋ Item da curva A</button><button class="btn btn-outline btn-sm" onclick="openAbcBulk()">📋 Colar itens</button>':stockTab?'<button class="btn btn-green btn-sm" onclick="openStockModal()">＋ Lançar movimento</button><button class="btn btn-outline btn-sm" onclick="openStockCfg()">⚙ Estoques</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>':'<button class="btn btn-green btn-sm" onclick="openCostModal()">＋ Lançar custo</button><button class="btn btn-outline btn-sm" onclick="openCostSectors()">⚙ Setores habilitados</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>'):'')
+    +(master?(abcTab?'<button class="btn btn-green btn-sm" onclick="openAbcModal()">＋ Item da curva A</button><button class="btn btn-outline btn-sm" onclick="openAbcBulk()">📋 Colar itens</button><button class="btn btn-outline btn-sm" onclick="openSighImport()">📄 Importar PDF (SIGH)</button>':stockTab?'<button class="btn btn-green btn-sm" onclick="openStockModal()">＋ Lançar movimento</button><button class="btn btn-outline btn-sm" onclick="openStockCfg()">⚙ Estoques</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>':'<button class="btn btn-green btn-sm" onclick="openCostModal()">＋ Lançar custo</button><button class="btn btn-outline btn-sm" onclick="openCostSectors()">⚙ Setores habilitados</button><button class="btn btn-outline btn-sm" onclick="openImport()">⬆ Importar planilha</button>'):'')
     +'<button class="btn btn-outline btn-sm" onclick="'+(stockTab?'stockExport()':abcTab?'abcExport()':COST.tab==='sheet'?'sheetExport()':'costExport()')+'">⬇ Exportar CSV</button></div></div>';
   h+='<div class="cu-tabs"><button class="cu-tab'+(COST.tab==='dash'?' on':'')+'" onclick="costSet(\'tab\',\'dash\')">📊 Dashboard</button><button class="cu-tab'+(COST.tab==='list'?' on':'')+'" onclick="costSet(\'tab\',\'list\')">🧾 Lançamentos</button><button class="cu-tab'+(COST.tab==='sheet'?' on':'')+'" onclick="costSet(\'tab\',\'sheet\')">📋 Planilha</button><button class="cu-tab'+(abcTab?' on':'')+'" onclick="costSet(\'tab\',\'abc\')">🏆 Curva A</button><button class="cu-tab'+(stockTab?' on':'')+'" onclick="costSet(\'tab\',\'stock\')">📦 Estoques</button></div>';
   if(!stockTab && !abcTab && !en.length){
@@ -3436,11 +3446,11 @@ function abcRows(){
 function abcSectors(){ var m={}; abcRows().forEach(function(r){ m[r.sector]=1; }); return Object.keys(m).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }); }
 function abcCompute(){
   var pr=costPeriod([]), rows=abcRows().filter(function(r){ return r.month>=pr[0]&&r.month<=pr[1]&&(!COST.sector||r.sector===COST.sector)&&(!COST.cat||r.cat===COST.cat); });
-  var by={}; rows.forEach(function(r){ var s=by[r.sector]=by[r.sector]||{}, o=s[r.key]=s[r.key]||{item:r.item,cat:r.cat,qty:0,value:0}; o.qty+=r.qty; o.value+=r.value; });
+  var by={}, rt={}, RK={A:1,B:2,C:3}; rows.forEach(function(r){ var s=by[r.sector]=by[r.sector]||{}, o=s[r.key]=s[r.key]||{item:r.item,cat:r.cat,qty:0,value:0,repCls:''}; o.qty+=r.qty; o.value+=r.value; if(r.cls&&(!o.repCls||RK[r.cls]<RK[o.repCls])) o.repCls=r.cls; if(r.tot>0){ var m=rt[r.sector]=rt[r.sector]||{}; m[r.month]=Math.max(m[r.month]||0,r.tot); } });
   return Object.keys(by).map(function(sec){
     var list=Object.keys(by[sec]).map(function(k){ return by[sec][k]; }).sort(function(a,b){ return b.value-a.value; }), sumI=list.reduce(function(a,i){ return a+i.value; },0), tot=sumI, cum=0, inf=COST.abcBase==='inf';
-    if(inf){ var secCost=costSum(costFilter(costAllRows(),pr[0],pr[1],'cat').filter(function(r){ return r.sector===sec; })); if(secCost>sumI) tot=secCost; }
-    list.forEach(function(i,ix){ var before=cum/tot; cum+=i.value; i.rank=ix+1; i.pct=tot?i.value/tot*100:0; i.cum=tot?cum/tot*100:0; i.cls=inf?'A':(before<.8?'A':(before<.95?'B':'C')); i.avg=i.qty?i.value/i.qty:0; });
+    if(inf){ var repT=0; Object.keys(rt[sec]||{}).forEach(function(m){ repT+=rt[sec][m]; }); if(repT>0){ tot=Math.max(repT,sumI); } else { var secCost=costSum(costFilter(costAllRows(),pr[0],pr[1],'cat').filter(function(r){ return r.sector===sec; })); if(secCost>sumI) tot=secCost; } }
+    list.forEach(function(i,ix){ var before=cum/tot; cum+=i.value; i.rank=ix+1; i.pct=tot?i.value/tot*100:0; i.cum=tot?cum/tot*100:0; i.cls=inf?(i.repCls||'A'):(before<.8?'A':(before<.95?'B':'C')); i.avg=i.qty?i.value/i.qty:0; });
     return {sector:sec,total:tot,sumItems:sumI,inf:inf,n:list.length,nA:list.filter(function(i){ return i.cls==='A'; }).length,list:list};
   }).sort(function(a,b){ return b.total-a.total; });
 }
@@ -3448,15 +3458,15 @@ function abcShown(g){ var l=COST.abcMode==='A'?g.list.filter(function(i){ return
 function renderCostAbc(){
   var body=document.getElementById('cuBody'), groups=abcCompute();
   if(!groups.length){ body.innerHTML='<div class="cu-card" style="text-align:center;padding:36px 20px;"><div style="font-size:42px;">🏆</div><div style="font-weight:900;margin:8px 0;">Sem itens para a curva ABC neste filtro</div>'+(COST.abcBase==='inf'?'<div style="font-size:13px;color:var(--ink-2);line-height:1.6;">'+(isMaster()?'Digite os itens da curva A de cada setor em <b>＋ Item da curva A</b> ou cole vários de uma vez em <b>📋 Colar itens</b>.':'O administrador master ainda não informou itens da curva A.')+'</div>':'<div style="font-size:13px;color:var(--ink-2);line-height:1.6;">A curva A usa os itens das solicitações de compra que têm <b>valor unitário</b> informado e foram recebidos (ou, em "Base", todos os solicitados com valor), agrupados por setor do requisitante.</div>')+'</div>'; return; }
-  var h='<div style="font-size:12.5px;color:var(--ink-2);margin:0 2px 10px;line-height:1.5;">'+(COST.abcBase==='inf'?'Itens da <b>curva A informados</b> para cada setor, ordenados pelo custo. O percentual é calculado sobre o <b>custo total do setor</b> no período (quando houver) — mostrando os 20 de maior valor.':'Itens das <b>solicitações de compra</b> de cada setor, ordenados pelo custo. <b>Curva A</b> = itens que somam até 80% do custo do setor (B até 95%; C o restante). Mostrando '+(COST.abcMode==='A'?'os 20 principais itens da curva A':'os 20 itens de maior custo')+' de cada setor.')+'</div>'
+  var h='<div style="font-size:12.5px;color:var(--ink-2);margin:0 2px 10px;line-height:1.5;">'+(COST.abcBase==='inf'?'Itens informados ou importados do SIGH, ordenados pelo custo. O percentual é calculado sobre o <b>total do relatório</b> (ou o custo do setor no período). Mostrando '+(COST.abcMode==='A'?'os 20 principais itens da curva A':'os 20 itens de maior valor')+' de cada setor.':'Itens das <b>solicitações de compra</b> de cada setor, ordenados pelo custo. <b>Curva A</b> = itens que somam até 80% do custo do setor (B até 95%; C o restante). Mostrando '+(COST.abcMode==='A'?'os 20 principais itens da curva A':'os 20 itens de maior custo')+' de cada setor.')+'</div>'
     +'<div class="db-tools" style="margin:0 0 10px 2px;"><button class="btn btn-outline btn-sm" onclick="cuToggleAll(true)">Expandir todos</button><button class="btn btn-outline btn-sm" onclick="cuToggleAll(false)">Recolher todos</button></div>';
   groups.forEach(function(g,gi){
     var sh=abcShown(g);
     h+='<details class="cu-det"'+((COST.sector||gi===0)?' open':'')+'><summary><span class="cu-dn">'+esc(g.sector)+'</span><span class="cu-dm">'+brl(g.inf?g.sumItems:g.total)+' <small>• '+g.n+' itens'+(g.inf?' • '+(g.total?(g.sumItems/g.total*100).toFixed(0):0)+'% do custo do setor':' • curva A: '+g.nA+' ('+(g.n?Math.round(g.nA/g.n*100):0)+'% dos itens = 80% do custo)')+'</small></span></summary>'
       +'<div class="cu-mx"><table class="cu-tbl"><thead><tr><th>#</th><th>Item</th><th>Categoria</th><th style="text-align:right">Qtd</th><th style="text-align:right">Preço médio</th><th style="text-align:right">Custo total</th><th>% do setor</th><th style="text-align:right">% acum.</th><th>Classe</th></tr></thead><tbody>'
-      +sh.map(function(i){ return '<tr><td>'+i.rank+'</td><td><b>'+esc(i.item)+'</b></td><td>'+esc(i.cat)+'</td><td style="text-align:right">'+Number(i.qty).toLocaleString('pt-BR')+'</td><td style="text-align:right">'+fmtNumBR(i.avg)+'</td><td style="text-align:right;font-weight:800;">'+fmtNumBR(i.value)+'</td>'
+      +sh.map(function(i){ return '<tr><td>'+i.rank+'</td><td><b>'+esc(i.item)+'</b></td><td>'+esc(i.cat==='Sem categoria'?'—':i.cat)+'</td><td style="text-align:right">'+Number(i.qty).toLocaleString('pt-BR')+'</td><td style="text-align:right">'+fmtNumBR(i.avg)+'</td><td style="text-align:right;font-weight:800;">'+fmtNumBR(i.value)+'</td>'
         +'<td style="min-width:120px;"><div class="abc-bar"><i style="width:'+Math.min(100,i.pct*2.2)+'%"></i><span>'+i.pct.toFixed(1).replace('.',',')+'%</span></div></td><td style="text-align:right">'+i.cum.toFixed(1).replace('.',',')+'%</td><td><span class="abc-c abc-'+i.cls+'">'+i.cls+'</span></td></tr>'; }).join('')
-      +'</tbody></table></div>'+(!g.inf&&COST.abcMode==='A'&&g.nA<20?'<div class="db-hint" style="padding:8px 4px;">A curva A deste setor tem '+g.nA+' iten(s). Mude "Mostrar" para "Top 20 geral" para ver mais.</div>':'')+'</details>';
+      +'</tbody></table></div>'+(COST.abcMode==='A'&&g.nA<20?'<div class="db-hint" style="padding:8px 4px;">A curva A deste setor tem '+g.nA+' iten(s). Mude "Mostrar" para "Top 20 geral" para ver mais.</div>':'')+'</details>';
   });
   if(COST.abcBase==='inf') h+=renderAbcInfList();
   body.innerHTML=h;
@@ -3476,7 +3486,7 @@ function abcExport(){
 // ═══════════════════════════════════════════════════════════════════════════
 COST.abcBase='inf';
 function abcInfRows(){
-  return (DB.abcItems||[]).map(function(i){ return {id:i.id,sector:i.sector,item:String(i.item||'').trim(),key:impKey(i.item),cat:i.cat||'Sem categoria',qty:Number(i.qty)||0,value:Number(i.value)||0,month:String(i.month||'').slice(0,7)}; })
+  return (DB.abcItems||[]).map(function(i){ return {id:i.id,sector:i.sector,item:String(i.item||'').trim(),key:i.cod?('c'+i.cod):impKey(i.item),cat:i.cat||'Sem categoria',qty:Number(i.qty)||0,value:Number(i.value)||0,month:String(i.month||'').slice(0,7),cls:i.cls||'',tot:Number(i.tot)||0}; })
     .filter(function(r){ return r.sector&&r.item&&r.month; });
 }
 function abcAllSectors(){
@@ -3567,6 +3577,145 @@ function renderAbcInfList(){
     +rows.slice(0,300).map(function(r){ return '<tr><td>'+mkLabel(r.month)+'</td><td>'+esc(r.sector)+'</td><td><b>'+esc(r.item)+'</b></td><td>'+esc(r.cat==='Sem categoria'?'—':r.cat)+'</td><td style="text-align:right">'+(r.qty?Number(r.qty).toLocaleString('pt-BR'):'—')+'</td><td style="text-align:right;font-weight:800;">'+fmtNumBR(r.value)+'</td>'
       +'<td style="text-align:right;white-space:nowrap;">'+(master?'<button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="openAbcModal(this.dataset.id)">✏️</button> <button class="btn btn-outline btn-sm" data-id="'+esc(r.id)+'" onclick="deleteAbcItem(this.dataset.id)">🗑</button>':'')+'</td></tr>'; }).join('')
     +'</tbody></table></div></details>';
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IMPORTAÇÃO DO RELATÓRIO "CURVA ABC" (SIGH · MT038) EM PDF — somente Master
+//  Lê as colunas pela posição no PDF (descrições longas invadem outras colunas no texto).
+// ═══════════════════════════════════════════════════════════════════════════
+var SIGH_COLS=[['div',299],['gru',346],['sub',381],['est',452],['cons',499],['unit',547],['gbl',617],['prod',661],['acum',729],['pacum',770]];
+function sighNum(s){ var v=String(s||'').replace(/R\$/g,'').replace(/\s/g,''); if(v.indexOf(',')>=0) v=v.replace(/\./g,'').replace(',','.'); var n=parseFloat(v); return isNaN(n)?null:n; }
+function sighTokens(it){
+  var s=it.str, w=(it.w>0&&it.w<700)?it.w:s.length*4.2, n=s.length||1, out=[], re=/R\$|[^\sR$]+|R/g, m;
+  s=s.replace(/R\$/g,' R$ ');
+  var off=0, parts=[]; s.split(/\s+/).forEach(function(p){ if(p) parts.push(p); });
+  // posição proporcional dentro do texto original (aproximada)
+  var pos=0, orig=it.str;
+  parts.forEach(function(p){ var i=orig.indexOf(p,pos); if(i<0) i=pos; out.push({t:p,x0:it.x+w*i/n,x1:it.x+w*(i+p.length)/n}); pos=i+p.length; });
+  return out;
+}
+function sighRows(items){
+  var sorted=items.slice().sort(function(a,b){ return b.y-a.y||a.x-b.x; }), rows=[], cur=null;
+  sorted.forEach(function(it){ if(cur&&Math.abs(cur.y-it.y)<=2.5) cur.items.push(it); else { cur={y:it.y,items:[it]}; rows.push(cur); } });
+  rows.forEach(function(r){ r.items.sort(function(a,b){ return a.x-b.x; }); });
+  return rows;
+}
+function sighParse(pages){
+  var res={centro:'',from:'',to:'',rows:[],total:0,expected:0,warn:0,bad:0};
+  pages.forEach(function(items){
+    sighRows(items).forEach(function(row){
+      var txt=row.items.map(function(i){ return i.str; }).join(' ');
+      var m=/Centro de Custo:\s*(.+)$/i.exec(txt); if(m&&!res.centro) res.centro=m[1].trim();
+      m=/Per[ií]odo:\s*de\s*(\d{2})\/(\d{2})\/(\d{4})\s*a\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(txt);
+      if(m&&!res.from){ res.from=m[3]+'-'+m[2]+'-'+m[1]; res.to=m[6]+'-'+m[5]+'-'+m[4]; }
+      m=/^Total:\s*(\d+)/i.exec(txt.trim()); if(m) res.expected=parseInt(m[1],10);
+      var cod=null, un='', desc=[], vals={}, cls='';
+      row.items.forEach(function(it){
+        var xr=it.x+((it.w>0&&it.w<700)?it.w:it.str.length*4.2);
+        if(it.x<292){
+          if(it.x>=95) desc.push(it.str);
+          else if(it.x>=62 && /^[A-Za-zÀ-ú]{1,4}$/.test(it.str)) un=it.str;
+          else if(xr>=48 && xr<=70 && /^\d+$/.test(it.str)) cod=it.str;
+          return;
+        }
+        sighTokens(it).forEach(function(tk){
+          if(tk.t==='R$') return;
+          if(tk.x1>=780 && /^[ABC]$/.test(tk.t)){ cls=tk.t; return; }
+          var best=null, bd=1e9; SIGH_COLS.forEach(function(c){ var d=Math.abs(tk.x1-c[1]); if(d<bd){ bd=d; best=c[0]; } });
+          if(bd<=10){ var v=sighNum(tk.t); if(v!==null&&vals[best]===undefined) vals[best]=v; }
+        });
+      });
+      if(!cod||!cls||vals.cons===undefined||vals.gbl===undefined) return;
+      var o={cod:cod,un:un,item:desc.join(' ').replace(/\s+/g,' ').trim(),qty:vals.cons,unit:vals.unit||0,value:vals.gbl,pct:vals.prod||0,cum:vals.pacum||0,tot:vals.acum||0,cls:cls};
+      var calc=o.qty*o.unit; o.warn=Math.abs(calc-o.value)>Math.max(0.06,o.value*0.012,o.qty*0.006);
+      if(o.warn) res.warn++;
+      res.rows.push(o);
+    });
+  });
+  res.total=res.rows.reduce(function(a,r){ return a+r.value; },0);
+  res.lastAcum=res.rows.length?Math.max.apply(null,res.rows.map(function(r){ return r.tot; })):0;
+  return res;
+}
+
+// ── Leitura do PDF no navegador (pdf.js carregado só quando necessário) ─────
+async function pdfLoadLib(){
+  if(window.pdfjsLib) return window.pdfjsLib;
+  var base='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  await new Promise(function(res,rej){ var sc=document.createElement('script'); sc.src=base+'pdf.min.js'; sc.onload=res; sc.onerror=function(){ rej(new Error('Não consegui carregar o leitor de PDF. Verifique a conexão com a internet e tente de novo.')); }; document.head.appendChild(sc); });
+  try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob(['importScripts("'+base+'pdf.worker.min.js");'],{type:'text/javascript'})); }
+  catch(e){ window.pdfjsLib.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.js'; }
+  return window.pdfjsLib;
+}
+async function pdfPagesItems(buf){
+  var lib=await pdfLoadLib(), doc=await lib.getDocument({data:buf}).promise, pages=[];
+  for(var p=1;p<=doc.numPages;p++){
+    var tc=await (await doc.getPage(p)).getTextContent();
+    pages.push(tc.items.filter(function(i){ return i.str&&i.str.trim(); }).map(function(i){ return {str:i.str,x:i.transform[4],y:i.transform[5],w:i.width}; }));
+  }
+  return pages;
+}
+
+var _sg=null;
+function sighGuessSector(centro){
+  var toks=impKey(centro).split(/[^a-z0-9]+/).filter(function(t){ return t.length>=4; }), best='', bs=0;
+  abcAllSectors().forEach(function(s){ var k=impKey(s), sc=0; toks.forEach(function(t){ if(k.indexOf(t)>=0||t.indexOf(k)>=0) sc++; }); if(sc>bs){ bs=sc; best=s; } });
+  return best;
+}
+function openSighImport(){
+  if(!isMaster()){ toast('Somente o administrador master importa o relatório.','error'); return; }
+  _sg=null; document.getElementById('sgFile').value='';
+  document.getElementById('sgBody').innerHTML='<div class="cp-none">Escolha o PDF do relatório <b>Curva ABC</b> (SIGH · MT038) de um centro de custo.<br>O sistema lê as colunas, mostra uma prévia e só grava depois que você confirmar.</div>';
+  document.getElementById('sgGo').style.display='none';
+  document.getElementById('sighModal').classList.remove('hidden');
+}
+async function sighLoad(inp){
+  var f=inp.files&&inp.files[0]; if(!f) return;
+  var body=document.getElementById('sgBody'), go=document.getElementById('sgGo');
+  go.style.display='none'; body.innerHTML='<div class="cp-none">Lendo o PDF...</div>';
+  try{
+    var r=sighParse(await pdfPagesItems(await f.arrayBuffer()));
+    if(!r.rows.length){ body.innerHTML='<div class="cp-none" style="color:#c42f2f;">Não encontrei itens no formato do relatório Curva ABC do SIGH (MT038). Confira se o PDF é desse relatório.</div>'; return; }
+    _sg={r:r,name:f.name}; var cnt={A:0,B:0,C:0}; r.rows.forEach(function(x){ cnt[x.cls]++; });
+    var mo=(r.from||'').slice(0,7), multi=r.from&&r.to&&r.from.slice(0,7)!==r.to.slice(0,7), sec=sighGuessSector(r.centro);
+    var sum=r.rows.reduce(function(a,x){ return a+x.value; },0), diff=Math.abs(sum-r.lastAcum);
+    var secOpts='<option value="">— escolha o setor —</option>'+abcAllSectors().map(function(s){ return '<option'+(s===sec?' selected':'')+'>'+esc(s)+'</option>'; }).join('');
+    body.innerHTML='<div style="font-size:13px;color:var(--ink-2);margin-bottom:10px;line-height:1.5;"><b>Centro de custo:</b> '+esc(r.centro||'—')+'<br><b>Período:</b> '+(r.from?r.from.split('-').reverse().join('/')+' a '+r.to.split('-').reverse().join('/'):'—')+' • <b>'+r.rows.length+'</b> itens'+(r.expected&&r.expected!==r.rows.length?' <span style="color:#c42f2f;">(o relatório informa '+r.expected+')</span>':' (confere com o total do relatório)')+'</div>'
+      +'<div class="cu-kpis" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;"><div class="stat-card"><div class="stat-lbl">Total do relatório</div><div class="stat-val" style="font-size:14px;">'+brl(r.lastAcum||sum)+'</div><div class="stat-sub" style="font-size:10.5px;">soma dos itens: '+brl(sum)+(diff>0.5?' <span style="color:#c42f2f;">(diferença '+brl(diff)+')</span>':'')+'</div></div>'
+      +'<div class="stat-card"><div class="stat-lbl">Curva A</div><div class="stat-val" style="font-size:16px;">'+cnt.A+'</div></div><div class="stat-card yellow"><div class="stat-lbl">Curva B</div><div class="stat-val" style="font-size:16px;">'+cnt.B+'</div></div><div class="stat-card"><div class="stat-lbl">Curva C</div><div class="stat-val" style="font-size:16px;">'+cnt.C+'</div></div></div>'
+      +'<div class="row2"><div class="form-group"><label>Setor *</label><select class="fc" id="sgSector" onchange="sighRefresh()">'+secOpts+'</select></div><div class="form-group"><label>Competência (mês) *</label><input class="fc" type="month" id="sgMonth" value="'+esc(mo)+'"></div></div>'
+      +(multi?'<div style="font-size:12px;color:#8a6208;background:#fdf6e2;border-radius:8px;padding:8px 10px;margin-bottom:8px;">⚠ O período do relatório abrange mais de um mês. Os valores serão lançados no mês escolhido acima — prefira importar um relatório por mês.</div>':'')
+      +'<div class="row2"><div class="form-group"><label>Itens a importar</label><select class="fc" id="sgMode" onchange="sighRefresh()"><option value="A">Somente curva A (recomendado)</option><option value="AB">Curvas A e B</option><option value="ALL">Todos os itens</option></select></div>'
+      +'<div class="form-group"><label>&nbsp;</label><label style="display:flex;gap:8px;align-items:center;font-size:12.5px;font-weight:600;text-transform:none;"><input type="checkbox" id="sgRepl" checked> Substituir itens deste setor e mês importados antes</label></div></div>'
+      +'<div id="sgPrev"></div>';
+    sighRefresh();
+  }catch(e){ body.innerHTML='<div class="cp-none" style="color:#c42f2f;">Não consegui ler o arquivo: '+esc(e.message||e)+'</div>'; }
+}
+function sighPick(){ var m=document.getElementById('sgMode').value; return _sg.r.rows.filter(function(x){ return x.value>0&&(m==='ALL'||(m==='AB'?x.cls!=='C':x.cls==='A')); }); }
+function sighRefresh(){
+  if(!_sg) return; var list=sighPick(), go=document.getElementById('sgGo'), sec=document.getElementById('sgSector').value;
+  document.getElementById('sgPrev').innerHTML='<div style="font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin:4px 0;">Prévia — '+list.length+' item(ns), '+brl(list.reduce(function(a,x){ return a+x.value; },0))+'</div><div style="max-height:210px;overflow:auto;"><table class="cu-tbl"><thead><tr><th>#</th><th>Item</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor</th><th>Cl.</th></tr></thead><tbody>'
+    +list.slice(0,12).map(function(x,i){ return '<tr><td>'+(i+1)+'</td><td>'+esc(x.item)+'</td><td style="text-align:right">'+Number(x.qty).toLocaleString('pt-BR')+'</td><td style="text-align:right">'+fmtNumBR(x.value)+'</td><td><span class="abc-c abc-'+x.cls+'">'+x.cls+'</span></td></tr>'; }).join('')+'</tbody></table></div>'
+    +(list.length>12?'<div class="db-hint">... e mais '+(list.length-12)+' item(ns).</div>':'')+(list.length>150?'<div class="db-hint" style="color:#c42f2f;">Muitos itens deixam o sistema mais pesado. Prefira somente a curva A.</div>':'');
+  go.style.display=''; go.disabled=!list.length||!sec; go.textContent=sec?'⬆ Importar '+list.length+' item(ns)':'Escolha o setor';
+}
+function sighConfirm(){
+  if(!isMaster()||!_sg) return;
+  var sec=document.getElementById('sgSector').value, mo=document.getElementById('sgMonth').value, repl=document.getElementById('sgRepl').checked, list=sighPick();
+  if(!sec){ toast('Escolha o setor.','error'); return; } if(!mo){ toast('Informe a competência (mês).','error'); return; }
+  var now=new Date().toISOString(), tot=_sg.r.lastAcum||0; if(!Array.isArray(DB.abcItems)) DB.abcItems=[];
+  var idx={}; DB.abcItems.forEach(function(i){ idx[i.id]=i; }), keep={}, nNew=0, nUpd=0, nDel=0;
+  list.forEach(function(x){
+    var id='PDF-'+impSlug(sec)+'-'+mo+'-'+x.cod; keep[id]=1;
+    var o={sector:sec,month:mo,item:x.item,cat:'',qty:x.qty,value:x.value,cls:x.cls,cod:x.cod,un:x.un,tot:tot,imported:true,rep:true,updatedAt:now};
+    if(idx[id]){ Object.assign(idx[id],o); nUpd++; } else { DB.abcItems.push(Object.assign({id:id,createdAt:now,by:CU.name},o)); nNew++; }
+  });
+  if(repl){
+    var del=DB.abcItems.filter(function(i){ return i.rep&&i.sector===sec&&i.month===mo&&!keep[i.id]; });
+    if(del.length){ DB.deletedAbcItems=(DB.deletedAbcItems||[]).concat(del.map(function(i){ return {k:String(i.id),at:now}; })); DB.abcItems=DB.abcItems.filter(function(i){ return !(i.rep&&i.sector===sec&&i.month===mo&&!keep[i.id]); }); nDel=del.length; }
+  }
+  saveDB(); closeModal('sighModal'); COST.abcBase='inf'; COST.sector=sec; renderCustos();
+  toast('Curva ABC importada em '+sec+': '+nNew+' novos, '+nUpd+' atualizados'+(nDel?', '+nDel+' removidos':'')+'.','success');
 }
 
 function emailUser(req,oldStatus,extra){
