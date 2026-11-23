@@ -1775,6 +1775,7 @@ function loadDB(){
 function saveDB(opts){
   DB._savedAt = new Date().toISOString();
   const json = JSON.stringify(DB);
+  if(json.length>6000000 && !window.__bigWarned){ window.__bigWarned=true; setTimeout(function(){ try{ toast('⚠ O banco de dados está grande ('+(json.length/1048576).toFixed(1)+' MB). Avise o administrador: rode a função diagnostico no GAS.','warning'); }catch(e){} },50); }
   // PRIMEIRO: salvar localmente (síncrono, instantâneo)
   try{ sessionStorage.setItem('hlr_sol_v1', json); }catch(e){}
   try{ localStorage.setItem('hlr_db_backup', json); }catch(e){}
@@ -2150,12 +2151,12 @@ function showDetail(reqId){
           const isImg=f.type&&f.type.startsWith('image/');
           return `<div style="background:var(--field);border:1.5px solid var(--line-2);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;max-width:220px;">
             ${isImg
-              ? `<img src="${f.data}" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid var(--line-2);" onclick="previewAttachment('${f.id}','${r.id}')" title="Visualizar">`
+              ? `<img src="${attThumb(f)}" style="width:44px;height:44px;object-fit:cover;border-radius:5px;cursor:pointer;border:1px solid var(--line-2);" onclick="previewAttachment('${f.id}','${r.id}')" title="Visualizar">`
               : `<span style="font-size:26px;">📄</span>`}
             <div style="min-width:0;">
               <div style="font-weight:800;font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</div>
               <div style="font-size:10px;color:var(--ink-3);">${f.size?Math.round(f.size/1024)+'KB':''}</div>
-              <a href="${f.data}" download="${f.name}" style="font-size:11px;color:var(--mint-ink);font-weight:700;text-decoration:none;">⬇ Baixar</a>
+              <a href="${attDl(f)}" ${f.data?`download="${f.name}"`:'target="_blank" rel="noopener"'} style="font-size:11px;color:var(--mint-ink);font-weight:700;text-decoration:none;">⬇ Baixar</a>
             </div>
           </div>`;
         }).join('')}
@@ -2219,35 +2220,44 @@ function addItem(){
 }
 function removeItem(id){ const tr=document.getElementById('ir-'+id); if(tr&&document.querySelectorAll('#itemsBody tr').length>1) tr.remove(); else toast('Mínimo 1 item.','warning'); }
 function clearForm(){ document.getElementById('itemsBody').innerHTML=''; iCount=0; attachedFiles=[]; document.getElementById('reqType').value=''; document.getElementById('reqJust').value=''; const ap=document.getElementById('attachPrevs'); if(ap) ap.innerHTML=''; addItem(); }
-function handleFiles(input){
-  const pv=document.getElementById('attachPrevs');
-  Array.from(input.files).forEach(f=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      // Guarda o objeto completo com base64 para persistir no request
-      attachedFiles.push({name:f.name,type:f.type,size:f.size,data:e.target.result,id:'A'+Date.now()+Math.random().toString(36).slice(2)});
-      // Preview visual
-      const wrap=document.createElement('div');
-      wrap.style.cssText='position:relative;display:inline-block;margin:4px;';
-      if(f.type.startsWith('image/')){
-        const img=document.createElement('img');
-        img.src=e.target.result;
-        img.className='attach-prev';
-        img.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px;border:1.5px solid #c8d8cc;cursor:pointer;';
-        img.title=f.name;
-        wrap.appendChild(img);
-      } else {
-        wrap.innerHTML=`<div style="width:56px;height:56px;border-radius:6px;border:1.5px solid var(--line-2);background:var(--field);display:flex;align-items:center;justify-content:center;font-size:24px;" title="${f.name}">📄</div>`;
-      }
-      const lbl=document.createElement('div');
-      lbl.style.cssText='font-size:9px;color:#5a7a60;text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      lbl.textContent=f.name;
-      wrap.appendChild(lbl);
-      pv.appendChild(wrap);
-    };
-    reader.readAsDataURL(f);
+// Anexos: fotos são reduzidas (máx. 1600 px) e arquivos grandes são recusados — anexos pesados enchiam o banco de dados
+var ATT_MAX_FILE=3*1024*1024;
+function attReadDataURL(f){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(r.result); }; r.onerror=function(){ rej(new Error('Não consegui ler "'+f.name+'".')); }; r.readAsDataURL(f); }); }
+function attCompress(f,max,q){
+  return new Promise(function(res,rej){
+    attReadDataURL(f).then(function(url){ var im=new Image(); im.onerror=function(){ rej(new Error('Imagem inválida: "'+f.name+'".')); };
+      im.onload=function(){ var k=Math.min(1,max/Math.max(im.width,im.height)), c=document.createElement('canvas'); c.width=Math.max(1,Math.round(im.width*k)); c.height=Math.max(1,Math.round(im.height*k));
+        var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height); x.drawImage(im,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); };
+      im.src=url; },rej);
   });
 }
+async function attPrepare(f){
+  if(f.type&&f.type.indexOf('image/')===0&&!/gif|svg/.test(f.type)){
+    var d=await attCompress(f,1600,.78); if(d.length>1500000) d=await attCompress(f,1100,.6);
+    return {data:d,type:'image/jpeg',size:Math.round(d.length*.75)};
+  }
+  if(f.size>ATT_MAX_FILE) throw new Error('"'+f.name+'" tem mais de 3 MB. Reduza o arquivo (ou anexe uma foto dele) e tente de novo.');
+  return {data:await attReadDataURL(f),type:f.type,size:f.size};
+}
+async function handleFiles(input){
+  const pv=document.getElementById('attachPrevs'), files=Array.from(input.files); input.value='';
+  for(const f of files){
+    try{
+      const p=await attPrepare(f);
+      attachedFiles.push({name:f.name,type:p.type,size:p.size,data:p.data,id:'A'+Date.now()+Math.random().toString(36).slice(2)});
+      const wrap=document.createElement('div'); wrap.style.cssText='position:relative;display:inline-block;margin:4px;';
+      if(p.type.indexOf('image/')===0){
+        const img=document.createElement('img'); img.src=p.data; img.className='attach-prev';
+        img.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px;border:1.5px solid #c8d8cc;cursor:pointer;'; img.title=f.name; wrap.appendChild(img);
+      } else {
+        const d=document.createElement('div'); d.title=f.name; d.textContent='📄'; d.style.cssText='width:56px;height:56px;border-radius:6px;border:1.5px solid var(--line-2);background:var(--field);display:flex;align-items:center;justify-content:center;font-size:24px;'; wrap.appendChild(d);
+      }
+      const lbl=document.createElement('div'); lbl.style.cssText='font-size:9px;color:#5a7a60;text-align:center;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; lbl.textContent=f.name; wrap.appendChild(lbl);
+      pv.appendChild(wrap);
+    }catch(e){ toast(e.message||'Não consegui anexar o arquivo.','error'); }
+  }
+}
+
 function markRequired(el){
   // Remove erro visual quando campo é preenchido
   if(el.value && el.value.trim()){
@@ -2383,9 +2393,12 @@ function renderMyItems(){
 }
 
 // ── DETAIL MODAL ──
+function attThumb(f){ return f.data||(f.fileId?'https://lh3.googleusercontent.com/d/'+f.fileId+'=w200':''); }
+function attDl(f){ return f.data||(f.fileId?'https://drive.google.com/uc?export=download&id='+f.fileId:'#'); }
 function previewAttachment(fileId, reqId){
   const r=DB.requests.find(x=>x.id===reqId); if(!r) return;
   const f=(r.attachments||[]).find(x=>x.id===fileId); if(!f) return;
+  if(!f.data&&f.fileId){ window.open('https://drive.google.com/file/d/'+f.fileId+'/view','_blank'); return; }
   const win=window.open('','_blank','width=900,height=700,resizable=yes');
   if(f.type&&f.type.startsWith('image/')){
     win.document.write(`<!DOCTYPE html><html><head><title>${f.name}</title></head><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${f.data}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body></html>`);
